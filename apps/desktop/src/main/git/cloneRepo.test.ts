@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
+import { pathToFileURL } from 'node:url';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { hasGit, initGitRepo, tempDir, writeTree } from '../../test/main/fixtures';
 import {
   attachFolderToRemote,
@@ -8,6 +9,7 @@ import {
   cloneOrAttach,
   describeCloneError,
   githubCredentialArgs,
+  inspectCloneFolder,
 } from './cloneRepo';
 import { git as runGit } from './plumbing';
 
@@ -194,5 +196,81 @@ describe.skipIf(!git)('cloneOrAttach', () => {
 
     expect(await cloneOrAttach(empty, remote, false)).toMatchObject({ ok: true, mode: 'cloned' });
     expect(await cloneOrAttach(empty, remote, false)).toMatchObject({ ok: true, mode: 'skipped' });
+  });
+});
+
+/** Over file:// git uses the pack protocol, so it prints progress the way a GitHub clone does. */
+function fileUrl(bare: string): string {
+  return pathToFileURL(bare).href;
+}
+
+/**
+ * An address whose "ssh" just waits, so a test has time to stop the clone or fetch. Git would
+ * fail once the wait ends, but the test stops it long before that.
+ */
+function slowRemote(): string {
+  vi.stubEnv('GIT_SSH_COMMAND', 'sleep 6; false');
+  return 'ssh://git@example.invalid/acme/app.git';
+}
+
+describe.skipIf(!git)('clone progress and stopping', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('reports progress that only rises and ends at 100', async () => {
+    const remote = fileUrl(bareRemote({ 'README.md': '# remote\n', 'src/a.ts': 'export {};\n' }));
+    const folder = join(tempDir(), 'progress');
+    const percents: number[] = [];
+
+    const outcome = await cloneIntoFolder(folder, remote, {
+      onProgress: (progress) => percents.push(progress.percent),
+    });
+
+    expect(outcome).toMatchObject({ ok: true, mode: 'cloned' });
+    expect(percents.length).toBeGreaterThan(1);
+    expect(percents.at(-1)).toBe(100);
+    for (let i = 1; i < percents.length; i += 1) {
+      expect(percents[i]).toBeGreaterThanOrEqual(percents[i - 1] as number);
+    }
+  });
+
+  it('stops a running clone and leaves the folder empty for a retry', async () => {
+    const remote = slowRemote();
+    const folder = tempDir();
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(), 300);
+
+    const outcome = await cloneIntoFolder(folder, remote, { signal: controller.signal });
+
+    expect(outcome).toMatchObject({ ok: false, cancelled: true, message: 'Clone stopped.' });
+    expect(readdirSync(folder)).toEqual([]);
+  });
+
+  it('stops an attach and takes back the .git it created, keeping the files', async () => {
+    const remote = slowRemote();
+    const folder = writeTree(tempDir(), { 'README.md': '# local\n' });
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(), 300);
+
+    const outcome = await cloneOrAttach(folder, remote, true, { signal: controller.signal });
+
+    expect(outcome).toMatchObject({ ok: false, cancelled: true });
+    expect(readdirSync(folder)).toEqual(['README.md']);
+  });
+});
+
+describe.skipIf(!git)('inspectCloneFolder', () => {
+  it('tells a repo, an empty folder and a folder with files apart', async () => {
+    const repo = initGitRepo().dir;
+    const missing = join(tempDir(), 'not-yet');
+    const junkOnly = tempDir();
+    writeFileSync(join(junkOnly, '.DS_Store'), '');
+    const withFiles = writeTree(tempDir(), { 'notes.txt': 'mine\n' });
+
+    expect(await inspectCloneFolder(repo)).toBe('repo');
+    expect(await inspectCloneFolder(missing)).toBe('empty');
+    expect(await inspectCloneFolder(junkOnly)).toBe('empty');
+    expect(await inspectCloneFolder(withFiles)).toBe('files');
   });
 });

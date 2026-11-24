@@ -68,6 +68,13 @@ export function replayToast(kind: ToastHistoryKind, title: string, description: 
 export function showLinkedToast(
   message: Omit<ToastHistoryItemInput, 'link'> & { link?: ToastHistoryLink },
   onOpen?: () => void,
+  options: {
+    /** The main button's name, "Open" unless the toast does something else with it. */
+    actionLabel?: string;
+    /** A second, quieter button. */
+    secondary?: { label: string; onClick: () => void };
+    duration?: number;
+  } = {},
 ): void {
   const { kind, title, description } = message;
   suppressRecord += 1;
@@ -75,7 +82,9 @@ export function showLinkedToast(
     const fn = kind === 'message' ? toast.message : toast[kind];
     fn(title, {
       description: description || undefined,
-      action: onOpen ? { label: 'Open', onClick: onOpen } : undefined,
+      action: onOpen ? { label: options.actionLabel ?? 'Open', onClick: onOpen } : undefined,
+      cancel: options.secondary,
+      duration: options.duration,
     });
   } finally {
     suppressRecord -= 1;

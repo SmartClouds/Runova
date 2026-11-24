@@ -1,8 +1,7 @@
-import { browsableRepoUrl, isClonableGithubUrl, normalizeCloneUrl } from '@runova/core';
-import type { CloneProjectResult } from '@shared/apiTypes';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { isClonableGithubUrl, normalizeCloneUrl } from '@runova/core';
 import { useState } from 'react';
-import { toast } from 'sonner';
+import { CloneProgressCard } from '@/components/clone/CloneProgressCard';
+import { runClone } from '@/components/clone/runClone';
 import { CloudDownload, GitBranch, Spinner } from '@/components/icons';
 import { SectionEmptyState } from '@/components/projects/ProjectDetailChrome';
 import { Button } from '@/components/ui/button';
@@ -16,11 +15,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { queryKeys } from '@/lib/queryKeys';
-import { confirmDialog } from '@/stores/confirmStore';
-
-/** The button carries its own spinner, so the clone opts out of the app-wide loading overlay. */
-const CLONE_META = { silentLoading: true } as const;
+import { useCloneJobForProject } from '@/stores/cloneJobsStore';
 
 /** `owner/repo` for a GitHub address, which is what a button has room for. */
 function repoLabel(repoUrl: string): string {
@@ -33,6 +28,10 @@ function repoLabel(repoUrl: string): string {
  * address (or the user types one) this gets that repo onto the computer: a clone into an empty
  * folder, or, after asking, connecting a folder that already holds the files. Starting a brand
  * new repository stays available through `onInitialize`.
+ *
+ * The clone runs in the background, so while it runs (or after it failed) the tab shows its
+ * progress card instead of the buttons, and a second clone into the same folder can't start.
+ * Once it succeeds the folder is a repository and the regular Git tab takes over.
  */
 export function GitCloneEmptyState({
   projectId,
@@ -43,58 +42,31 @@ export function GitCloneEmptyState({
   repoUrl: string;
   onInitialize: () => void;
 }): React.JSX.Element {
-  const queryClient = useQueryClient();
+  const job = useCloneJobForProject(projectId);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [draftUrl, setDraftUrl] = useState('');
+  const [starting, setStarting] = useState(false);
 
   const savedClonable = isClonableGithubUrl(repoUrl);
-
-  const cloneMutation = useMutation({
-    mutationFn: async ({
-      url,
-      attach,
-    }: {
-      url: string;
-      attach: boolean;
-    }): Promise<{ url: string; result: CloneProjectResult }> => {
-      const result = await window.runova.git.cloneProject({ projectId, repoUrl: url, attach });
-      return { url, result };
-    },
-    onSuccess: async ({ url, result }) => {
-      if (result.needsAttachConfirm) {
-        const confirmed = await confirmDialog({
-          title: `Connect this folder to ${repoLabel(url)}?`,
-          description:
-            'This folder already has files. They stay exactly as they are, and anything that differs from GitHub shows up as a change on this tab.',
-          icon: GitBranch,
-          confirmLabel: 'Connect',
-        });
-        if (confirmed) cloneMutation.mutate({ url, attach: true });
-        return;
-      }
-      if (!result.ok) {
-        toast.error(result.message);
-        return;
-      }
-
-      toast.success(result.message);
-      setDialogOpen(false);
-      const link = browsableRepoUrl(url);
-      if (link !== repoUrl) {
-        // The address that worked becomes the project's repository link.
-        await window.runova.projects.update(projectId, { repoUrl: link });
-        void queryClient.invalidateQueries({ queryKey: queryKeys.projects });
-      }
-      void queryClient.invalidateQueries({ queryKey: queryKeys.gitStatus(projectId) });
-    },
-    onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Clone failed.');
-    },
-    meta: CLONE_META,
-  });
-
-  const pending = cloneMutation.isPending;
   const draftClonable = isClonableGithubUrl(draftUrl);
+
+  async function clone(url: string): Promise<void> {
+    setStarting(true);
+    try {
+      const result = await runClone({ projectId, repoUrl: url, attach: false });
+      if (result.ok) setDialogOpen(false);
+    } finally {
+      setStarting(false);
+    }
+  }
+
+  if (job) {
+    return (
+      <div className="mx-auto flex w-full max-w-lg flex-col py-10">
+        <CloneProgressCard job={job} variant="full" />
+      </div>
+    );
+  }
 
   function openUrlDialog(): void {
     setDraftUrl(repoUrl);
@@ -102,11 +74,8 @@ export function GitCloneEmptyState({
   }
 
   const cloneSaved = (
-    <Button
-      disabled={pending}
-      onClick={() => cloneMutation.mutate({ url: repoUrl, attach: false })}
-    >
-      {pending ? (
+    <Button disabled={starting} onClick={() => void clone(repoUrl)}>
+      {starting ? (
         <Spinner className="h-4 w-4 animate-spin" />
       ) : (
         <CloudDownload className="h-4 w-4" />
@@ -134,16 +103,16 @@ export function GitCloneEmptyState({
             {savedClonable ? (
               <>
                 {cloneSaved}
-                <Button variant="outline" disabled={pending} onClick={onInitialize}>
+                <Button variant="outline" disabled={starting} onClick={onInitialize}>
                   <GitBranch className="h-4 w-4" /> Initialize a new repository
                 </Button>
               </>
             ) : (
               <>
-                <Button disabled={pending} onClick={onInitialize}>
+                <Button disabled={starting} onClick={onInitialize}>
                   <GitBranch className="h-4 w-4" /> Initialize repository
                 </Button>
-                <Button variant="outline" disabled={pending} onClick={openUrlDialog}>
+                <Button variant="outline" disabled={starting} onClick={openUrlDialog}>
                   <CloudDownload className="h-4 w-4" /> Clone from GitHub…
                 </Button>
               </>
@@ -152,22 +121,21 @@ export function GitCloneEmptyState({
         }
       />
 
-      <Dialog open={dialogOpen} onOpenChange={(open) => !pending && setDialogOpen(open)}>
+      <Dialog open={dialogOpen} onOpenChange={(open) => !starting && setDialogOpen(open)}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Clone from GitHub</DialogTitle>
             <DialogDescription>
-              The repository is cloned into this project's folder. If the folder already has files,
-              you'll be asked before they are connected to it.
+              The repository is cloned into this project's folder in the background, so you can keep
+              working. If the folder already has files, you'll be asked before they are connected to
+              it.
             </DialogDescription>
           </DialogHeader>
           <form
             className="space-y-2"
             onSubmit={(event) => {
               event.preventDefault();
-              if (draftClonable && !pending) {
-                cloneMutation.mutate({ url: draftUrl.trim(), attach: false });
-              }
+              if (draftClonable && !starting) void clone(draftUrl.trim());
             }}
           >
             <Label htmlFor="git-clone-url">Repository address</Label>
@@ -185,13 +153,13 @@ export function GitCloneEmptyState({
               <Button
                 type="button"
                 variant="outline"
-                disabled={pending}
+                disabled={starting}
                 onClick={() => setDialogOpen(false)}
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={!draftClonable || pending}>
-                {pending ? (
+              <Button type="submit" disabled={!draftClonable || starting}>
+                {starting ? (
                   <Spinner className="h-4 w-4 animate-spin" />
                 ) : (
                   <CloudDownload className="h-4 w-4" />

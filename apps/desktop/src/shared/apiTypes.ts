@@ -2095,33 +2095,58 @@ export interface ConnectRemoteInput {
   push: boolean;
 }
 
-/** Clones a GitHub repo into the folder picked in the New Project dialog. */
-export interface CloneIntoInput {
-  folderPath: string;
-  /** Whatever the user pasted; validated and normalized in main. */
-  repoUrl: string;
-}
-
-/** Outcome of the Add Project auto-clone. Project creation still proceeds on failure. */
-export interface CloneIntoResult extends GitOpResult {
-  /** True when the folder already held a repo and no clone was needed. */
-  skipped?: boolean;
-}
-
-/** The Git tab's Clone from GitHub, for a project whose folder isn't a repo yet. */
-export interface CloneProjectInput {
+/**
+ * Starts getting a project's GitHub repo onto this computer in the background: a clone for an
+ * empty or missing folder, or, once the user has confirmed, attaching a folder that already has
+ * files. Used right after New Project and by the Git tab's Clone from GitHub.
+ */
+export interface StartCloneInput {
   projectId: string;
-  /** Address to clone; the project's stored `repoUrl` when omitted. */
+  /** Address to clone; the project's stored `repoUrl` when omitted. Saved on success. */
   repoUrl?: string;
   /** The folder has files and the user agreed to connect it in place, keeping them. */
   attach?: boolean;
 }
 
-export interface CloneProjectResult extends GitOpResult {
-  /** cloned: fresh checkout. attached: existing files connected. skipped: already a repo. */
-  mode?: 'cloned' | 'attached' | 'skipped';
+export interface StartCloneResult {
+  ok: boolean;
+  message: string;
+  /** The job now running for the project's folder (a new one, or the one already running). */
+  job?: CloneJob;
+  /** The folder already holds a repo, so there was nothing to clone. */
+  skipped?: boolean;
   /** The folder has files, so nothing ran; call again with `attach: true` once confirmed. */
   needsAttachConfirm?: boolean;
+}
+
+/** Where a clone is: on GitHub's side, downloading, unpacking, then writing the files. */
+export type CloneProgressPhase = 'remote' | 'receiving' | 'resolving' | 'checkout';
+
+export type CloneJobStatus = 'running' | 'succeeded' | 'failed' | 'cancelled';
+
+/** A clone running in main, which outlives the page (and the dialog) that started it. */
+export interface CloneJob {
+  id: string;
+  projectId: string;
+  projectName: string;
+  /** The https address, without credentials. */
+  repoUrl: string;
+  /** `owner/repo`, for labels. */
+  repoLabel: string;
+  folderPath: string;
+  /** Connecting a folder that already has files rather than a fresh clone. */
+  attach: boolean;
+  status: CloneJobStatus;
+  /** Null until git says anything, which can take a while for a big repo. */
+  phase: CloneProgressPhase | null;
+  /** The whole job, 0 to 100. */
+  percent: number;
+  receivedBytes?: number;
+  bytesPerSecond?: number;
+  /** Why it failed, or what it did. */
+  message?: string;
+  startedAt: number;
+  finishedAt?: number;
 }
 
 export type PackageManagerEcosystem =

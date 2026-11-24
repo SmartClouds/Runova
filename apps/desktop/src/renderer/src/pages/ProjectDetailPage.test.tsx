@@ -1,7 +1,9 @@
 import type { Project } from '@runova/core';
 import { AGENT_TYPE_LABELS } from '@runova/core';
+import type { CloneJob } from '@shared/apiTypes';
 import { screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import { useCloneJobsStore } from '@/stores/cloneJobsStore';
 import { renderWithProviders } from '../../../test/renderer/renderWithProviders';
 
 /**
@@ -984,10 +986,27 @@ describe('ProjectDetailPage Git tab without a repository', () => {
     });
   }
 
-  it('offers to clone the saved GitHub repository instead of only starting a new one', async () => {
+  function cloneJob(overrides: Partial<CloneJob> = {}): CloneJob {
+    return {
+      id: 'j1',
+      projectId: 'p1',
+      projectName: 'Apollo',
+      repoUrl: 'https://github.com/me/my-app',
+      repoLabel: 'me/my-app',
+      folderPath: 'C:/code/apollo',
+      attach: false,
+      status: 'running',
+      phase: 'receiving',
+      percent: 30,
+      startedAt: Date.now(),
+      ...overrides,
+    };
+  }
+
+  it('offers to clone the saved GitHub repository, then shows the clone running in place', async () => {
     const { user, bridge } = renderGitTab(
       { repoUrl: 'https://github.com/me/my-app' },
-      { 'git.cloneProject': async () => ({ ok: true, message: 'Cloned.', mode: 'cloned' }) },
+      { 'git.startClone': async () => ({ ok: true, message: 'Cloning.', job: cloneJob() }) },
     );
 
     expect(
@@ -997,23 +1016,38 @@ describe('ProjectDetailPage Git tab without a repository', () => {
     await user.click(screen.getByRole('button', { name: /Clone me\/my-app/ }));
 
     await waitFor(() =>
-      expect(bridge.$fn('git.cloneProject')).toHaveBeenCalledWith({
+      expect(bridge.$fn('git.startClone')).toHaveBeenCalledWith({
         projectId: 'p1',
         repoUrl: 'https://github.com/me/my-app',
         attach: false,
       }),
     );
-    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Cloned.'));
+    expect(await screen.findByRole('progressbar', { name: 'Cloning me/my-app' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Clone me\/my-app/ })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Stop cloning me/my-app' })).toBeTruthy();
+  });
+
+  it('shows a clone started elsewhere instead of offering a second one', async () => {
+    useCloneJobsStore.getState().setJobs([cloneJob({ percent: 72 })]);
+    renderGitTab({ repoUrl: 'https://github.com/me/my-app' });
+
+    const bar = await screen.findByRole('progressbar', { name: 'Cloning me/my-app' });
+    expect(bar).toHaveAttribute('aria-valuenow', '72');
+    expect(screen.queryByRole('button', { name: /Clone me\/my-app/ })).toBeNull();
   });
 
   it('asks before connecting a folder that already has files, then attaches it', async () => {
-    const cloneProject = vi
+    const startClone = vi
       .fn()
       .mockResolvedValueOnce({ ok: false, needsAttachConfirm: true, message: 'Has files.' })
-      .mockResolvedValueOnce({ ok: true, message: 'Connected.', mode: 'attached' });
+      .mockResolvedValueOnce({
+        ok: true,
+        message: 'Cloning.',
+        job: cloneJob({ attach: true, phase: null, percent: 0 }),
+      });
     const { user } = renderGitTab(
       { repoUrl: 'https://github.com/me/my-app' },
-      { 'git.cloneProject': cloneProject },
+      { 'git.startClone': startClone },
     );
 
     await user.click(await screen.findByRole('button', { name: /Clone me\/my-app/ }));
@@ -1024,22 +1058,25 @@ describe('ProjectDetailPage Git tab without a repository', () => {
       ),
     );
     await waitFor(() =>
-      expect(cloneProject).toHaveBeenLastCalledWith({
+      expect(startClone).toHaveBeenLastCalledWith({
         projectId: 'p1',
         repoUrl: 'https://github.com/me/my-app',
         attach: true,
       }),
     );
     expect(toast.error).not.toHaveBeenCalledWith('Has files.');
-    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Connected.'));
+    expect(await screen.findByText('Connecting to me/my-app')).toBeTruthy();
   });
 
-  it('clones a typed address when the project has none, and saves it as the repo link', async () => {
+  it('clones a typed address when the project has none, and closes the dialog once it starts', async () => {
     const { user, bridge } = renderGitTab(
       {},
       {
-        'git.cloneProject': async () => ({ ok: true, message: 'Cloned.', mode: 'cloned' }),
-        'projects.update': async () => project({ repoUrl: 'https://github.com/me/other' }),
+        'git.startClone': async () => ({
+          ok: true,
+          message: 'Cloning.',
+          job: cloneJob({ repoUrl: 'https://github.com/me/other', repoLabel: 'me/other' }),
+        }),
       },
     );
 
@@ -1051,17 +1088,29 @@ describe('ProjectDetailPage Git tab without a repository', () => {
     await user.click(clone);
 
     await waitFor(() =>
-      expect(bridge.$fn('git.cloneProject')).toHaveBeenCalledWith({
+      expect(bridge.$fn('git.startClone')).toHaveBeenCalledWith({
         projectId: 'p1',
         repoUrl: 'github.com/me/other',
         attach: false,
       }),
     );
-    await waitFor(() =>
-      expect(bridge.$fn('projects.update')).toHaveBeenCalledWith('p1', {
-        repoUrl: 'https://github.com/me/other',
-      }),
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(await screen.findByRole('progressbar', { name: 'Cloning me/other' })).toBeTruthy();
+  });
+
+  it('keeps the dialog open with the reason when the clone cannot start', async () => {
+    const { user } = renderGitTab(
+      {},
+      { 'git.startClone': async () => ({ ok: false, message: 'Repository not found.' }) },
     );
+
+    await user.click(await screen.findByRole('button', { name: /Clone from GitHub/ }));
+    const dialog = await screen.findByRole('dialog');
+    await user.type(within(dialog).getByLabelText('Repository address'), 'github.com/me/other');
+    await user.click(within(dialog).getByRole('button', { name: /^Clone$/ }));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Repository not found.'));
+    expect(screen.getByRole('dialog')).toBeTruthy();
   });
 });
 

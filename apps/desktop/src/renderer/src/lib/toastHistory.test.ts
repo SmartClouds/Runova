@@ -26,7 +26,7 @@ vi.mock('sonner', () => {
 });
 
 const { toast } = await import('sonner');
-const { installToastHistoryCapture, replayToast } = await import('./toastHistory');
+const { installToastHistoryCapture, replayToast, showLinkedToast } = await import('./toastHistory');
 
 installToastHistoryCapture();
 
@@ -125,5 +125,48 @@ describe('replayToast', () => {
     replayToast('info', 'Old', '');
     toast.info('New');
     expect(items().map((item) => item.title)).toEqual(['New']);
+  });
+});
+
+describe('showLinkedToast', () => {
+  it('names its button, adds a second one, and keeps one history row with the link', () => {
+    const onOpen = vi.fn();
+    const onRetry = vi.fn();
+    showLinkedToast(
+      {
+        kind: 'error',
+        title: "Couldn't clone My app",
+        description: 'Repository not found.',
+        link: { route: '/projects/p1?tab=git' },
+        projectId: 'p1',
+      },
+      onRetry,
+      {
+        actionLabel: 'Try again',
+        secondary: { label: 'Open Git tab', onClick: onOpen },
+        duration: 12000,
+      },
+    );
+
+    expect(shown.calls).toHaveLength(1);
+    const options = shown.calls[0]?.args[1] as {
+      action: { label: string; onClick: () => void };
+      cancel: { label: string; onClick: () => void };
+      duration: number;
+    };
+    expect(options.action.label).toBe('Try again');
+    expect(options.cancel.label).toBe('Open Git tab');
+    expect(options.duration).toBe(12000);
+    options.action.onClick();
+    options.cancel.onClick();
+    expect(onRetry).toHaveBeenCalled();
+    expect(onOpen).toHaveBeenCalled();
+
+    expect(items()).toHaveLength(1);
+    expect(items()[0]).toMatchObject({
+      kind: 'error',
+      link: { route: '/projects/p1?tab=git' },
+      projectId: 'p1',
+    });
   });
 });

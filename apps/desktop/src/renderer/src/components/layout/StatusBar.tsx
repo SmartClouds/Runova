@@ -58,6 +58,7 @@ import { useShortcutLabel } from '@/stores/shortcutStore';
 import { useTerminalStore } from '@/stores/terminalStore';
 import { terminalTabLabel, useWorkspaceStore } from '@/stores/workspaceStore';
 import { AccountSyncSegment } from './AccountSyncSegment';
+import { CloneJobsSegment } from './CloneJobsSegment';
 import { FileSendSegment } from './FileSendSegment';
 import { GithubAccountSegment } from './GithubAccountSegment';
 import { NetworkSegment } from './NetworkSegment';
@@ -1313,6 +1314,7 @@ export function StatusBar(): React.JSX.Element {
         <RelayStatusSegment />
         <RelayPlanStatusSegment />
         <RunSegments />
+        <CloneJobsSegment />
         <SftpTransfersSegment />
         <FileSendSegment />
         <TerminalsSegment />

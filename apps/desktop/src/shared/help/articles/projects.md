@@ -62,7 +62,7 @@ Until the name and folder are filled in, the button is disabled and the footer s
 | --- | --- |
 | **Name** | The project's name. |
 | **Folder** | Where the project lives. Paste a path or click **Browse**. Terminals and agents start in this folder. Picking a folder fills in the name from the folder name if the name is empty. |
-| **Git repository** | Where the code is hosted. Paste a GitHub link (`github.com/owner/repo`) to clone it into the folder on Create: the dialog says "Will clone into …". The folder must be empty (an existing repo is kept as-is). A private repo needs the GitHub CLI signed in (`gh auth login`), and Runova uses that sign-in for the clone and for later fetches and pulls. A failed clone still creates the project with the link, and the error tells you why. Use **Clone from GitHub** on the project's Git tab to try again, see [Git](#git). An **Open** button opens the link. Fetch and pull afterwards from the project's Git tab. |
+| **Git repository** | Where the code is hosted. Paste a GitHub link (`github.com/owner/repo`) to clone it into the folder after Create: the dialog says "Will clone into …". The project is created right away and the clone runs in the background, see [Cloning in the background](#cloning-in-the-background). If the folder already has files, Runova asks before it connects them to the repository (an existing repo is kept as-is). A private repo needs the GitHub CLI signed in (`gh auth login`), and Runova uses that sign-in for the clone and for later fetches and pulls. A failed clone keeps the project and its link, and the message tells you why. An **Open** button opens the link. Fetch and pull afterwards from the project's Git tab. |
 | **Tags** | Press `Enter` or comma to add a tag. Backspace in the empty box removes the last one. Tags are used by search and filtering. |
 | **Description** | One line about what the project is. |
 
@@ -219,7 +219,16 @@ The Git section is a full set of everyday git tools for the project's folder. Se
 
 If the folder is not a repository, the section says so and offers **Initialize repository** or **Clone from GitHub…**. If the project has a GitHub address saved but nothing was cloned yet (for example the clone on Create failed), the section says "This project's GitHub repository isn't on this computer yet" and the first button is **Clone** followed by the repository name, with **Initialize a new repository** next to it.
 
-**Clone from GitHub…** asks for the **Repository address** (`https://github.com/owner/repo`) and clones it into the project's folder. If the folder already has files, Runova asks before it connects them to the repository, and your files are left as they are, so differences show up as changes. A private repository needs the GitHub CLI signed in (`gh auth login`). If git cannot start the GitHub CLI, the message says "Make sure gh is installed and on your PATH", so check that `gh` runs in a terminal and try again.
+**Clone from GitHub…** asks for the **Repository address** (`https://github.com/owner/repo`) and clones it into the project's folder in the background, the same way a new project does (see below). If the folder already has files, Runova asks before it connects them to the repository, and your files are left as they are, so differences show up as changes. A private repository needs the GitHub CLI signed in (`gh auth login`). If git cannot start the GitHub CLI, the message says "Make sure gh is installed and on your PATH", so check that `gh` runs in a terminal and try again.
+
+### Cloning in the background
+
+A clone runs on its own, so you can keep working while a big repository downloads, on this page or any other.
+
+- **On the project card**: a progress bar under the project shows the step (Contacting GitHub, Preparing on GitHub, Downloading, Unpacking, Writing files), how much has come down and how fast, and the percent. **Run** waits until the clone finishes. The stop button cancels the clone and leaves the folder empty again.
+- **On the Git tab**: the same progress, with **Stop**, while the clone runs. **Clone** is not offered again until it ends, so the same folder is never cloned twice.
+- **In the status bar**: "Cloning …" with the percent, on every page. Click it for each clone, with **Stop**, **Try again** and **Open project**.
+- **When it ends**: a message in the corner says "… is ready" with **Open project**, or "Couldn't clone …" with the reason, **Try again** and **Open Git tab**. Both are kept in Recent messages. If Runova is in the background, you get a system notification instead, and clicking it opens the project's Git tab. A clone you stopped yourself shows no message.
 
 **Initialize repository** starts a new repository instead. The setup wizard walks through two steps:
 

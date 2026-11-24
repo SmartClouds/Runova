@@ -2178,8 +2178,12 @@ export const IPC = {
     createGithubRepo: 'git:createGithubRepo',
     connectRemote: 'git:connectRemote',
     detectRemote: 'git:detectRemote',
-    cloneInto: 'git:cloneInto',
-    cloneProject: 'git:cloneProject',
+    startClone: 'git:startClone',
+    cloneJobs: 'git:cloneJobs',
+    cancelClone: 'git:cancelClone',
+    dismissClone: 'git:dismissClone',
+    // main -> renderer: every background clone, sent whole whenever one changes
+    onCloneJobs: 'git:onCloneJobs',
     watchRepo: 'git:watchRepo',
     unwatchRepo: 'git:unwatchRepo',
     // main -> renderer: the repo moved on disk (commit, checkout, merge, fetch, stage)

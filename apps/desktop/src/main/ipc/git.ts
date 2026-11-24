@@ -1,18 +1,10 @@
 import type { GitChangeEntry, Project } from '@runova/core';
-import {
-  browsableRepoUrl,
-  buildCommitMessagePrompt,
-  normalizeCloneUrl,
-  stripRemoteCredentials,
-} from '@runova/core';
-import { ipcMain } from 'electron';
+import { browsableRepoUrl, buildCommitMessagePrompt, stripRemoteCredentials } from '@runova/core';
+import { BrowserWindow, ipcMain } from 'electron';
 import type {
   ApplyVersionInput,
   ApplyVersionResult,
-  CloneIntoInput,
-  CloneIntoResult,
-  CloneProjectInput,
-  CloneProjectResult,
+  CloneJob,
   ConnectRemoteInput,
   CreateGithubRepoInput,
   CreateGithubRepoResult,
@@ -38,6 +30,8 @@ import type {
   GitTagInfo,
   RenameBranchInput,
   ResolveConflictWithAiResult,
+  StartCloneInput,
+  StartCloneResult,
   SuggestGitTextResult,
   SuggestTagResult,
   SwapVersionFileInput,
@@ -54,7 +48,8 @@ import {
   readConflictedText,
   resolutionSummary,
 } from '../git/aiConflict';
-import { cloneIntoFolder, cloneOrAttach } from '../git/cloneRepo';
+import { createCloneJobs } from '../git/cloneJobs';
+import { cloneOrAttach, inspectCloneFolder } from '../git/cloneRepo';
 import {
   GITHUB_NAME_PATTERN,
   type GithubApiRepo,
@@ -156,6 +151,7 @@ import { showOsNotification } from '../notifications/osNotification';
 import { schedulePipelineCheck } from '../pipelines/watcher';
 import { store } from '../store';
 import { findProjectScope } from '../worktrees/resolve';
+import { updateProjectRecord } from './projects';
 import { broadcastToWindows } from './send';
 
 const GH_TIMEOUT_MS = 30000;
@@ -200,8 +196,6 @@ const CONFLICT_RESOLVE_TIMEOUT_MS = 600000;
  * are nothing to hand a browser, so the project's repository link stays empty.
  */
 const LOCAL_REMOTE_PATTERN = /^([a-z]:[\\/]|\\\\|\/|\.{1,2}[\\/]|file:)/i;
-
-const NOT_CLONABLE_MESSAGE = 'That address cannot be cloned. Use a github.com/owner/repo link.';
 
 /** The project, or for a worktree's workspace (a scope id) the project pointed at the worktree. */
 async function getProject(projectId: string): Promise<Project> {
@@ -921,46 +915,44 @@ function registerRepoHandlers(): void {
     },
   );
 
-  /**
-   * Clones a public or (with gh signed in) private GitHub repo into the folder picked in
-   * New Project. Blocks on a non-empty folder and skips when the folder already holds a
-   * repo. Never throws: the renderer still creates the project when the clone fails, and
-   * the Git tab's Clone from GitHub picks it up from there.
-   */
-  ipcMain.handle(
-    IPC.git.cloneInto,
-    async (_event, input: CloneIntoInput): Promise<CloneIntoResult> => {
-      const folder = input?.folderPath?.trim() ?? '';
-      if (!folder) return { ok: false, message: 'Pick a folder to clone into.' };
-      const normalized = normalizeCloneUrl(input?.repoUrl ?? '');
-      if (!normalized) return { ok: false, message: NOT_CLONABLE_MESSAGE };
-      try {
-        const outcome = await cloneIntoFolder(folder, normalized);
-        return { ok: outcome.ok, message: outcome.message, skipped: outcome.mode === 'skipped' };
-      } catch (error) {
-        return { ok: false, message: (error as Error)?.message || 'Clone failed.' };
-      }
-    },
-  );
+  registerCloneHandlers();
+}
 
-  /**
-   * Gets an existing project's GitHub repo onto this computer: a clone for an empty or
-   * missing folder, or for a folder that already has files, attaching it in place once the
-   * user has confirmed. This is how a clone that failed at create time is retried.
-   */
+/**
+ * Background clones: New Project and the Git tab's Clone from GitHub start one, and every window
+ * follows it through `onCloneJobs`, so the user can leave the page while a big repo downloads.
+ * A clone that fails still leaves the project in place, and Clone from GitHub retries it.
+ */
+function registerCloneHandlers(): void {
+  const jobs = createCloneJobs({
+    getProject,
+    inspectFolder: inspectCloneFolder,
+    clone: cloneOrAttach,
+    saveRepoUrl: async (projectId, repoUrl) => {
+      await updateProjectRecord(projectId, { repoUrl });
+    },
+    broadcast: (list) => broadcastToWindows(IPC.git.onCloneJobs, list),
+    notify: (notification) => showOsNotification(notification),
+    isAppFocused: () => BrowserWindow.getFocusedWindow() !== null,
+  });
+
   ipcMain.handle(
-    IPC.git.cloneProject,
-    async (_event, input: CloneProjectInput): Promise<CloneProjectResult> => {
-      const project = await getProject(input.projectId);
-      const normalized = normalizeCloneUrl(input.repoUrl?.trim() || project.repoUrl || '');
-      if (!normalized) return { ok: false, message: NOT_CLONABLE_MESSAGE };
+    IPC.git.startClone,
+    async (_event, input: StartCloneInput): Promise<StartCloneResult> => {
       try {
-        return await cloneOrAttach(project.folderPath, normalized, input.attach === true);
+        return await jobs.start({
+          projectId: String(input?.projectId ?? ''),
+          repoUrl: typeof input?.repoUrl === 'string' ? input.repoUrl : undefined,
+          attach: input?.attach === true,
+        });
       } catch (error) {
         return { ok: false, message: (error as Error)?.message || 'Clone failed.' };
       }
     },
   );
+  ipcMain.handle(IPC.git.cloneJobs, (): CloneJob[] => jobs.list());
+  ipcMain.handle(IPC.git.cancelClone, (_event, id: string): boolean => jobs.cancel(String(id)));
+  ipcMain.handle(IPC.git.dismissClone, (_event, id: string): boolean => jobs.dismiss(String(id)));
 }
 
 function registerBranchHandlers(): void {

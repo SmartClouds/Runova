@@ -1,8 +1,9 @@
 import { mkdir, readdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { stripRemoteCredentials } from '@runova/core';
+import { type CloneProgress, createCloneProgressParser } from './cloneProgress';
 import { runGh } from './githubCli';
-import { git, gitOrNull, isGitRepo } from './plumbing';
+import { git, gitOrNull, gitStream, isGitRepo } from './plumbing';
 
 /** A first clone of a big repo over a slow line takes a while, so it gets the push budget and then some. */
 const CLONE_TIMEOUT_MS = 300000;
@@ -25,6 +26,33 @@ export interface CloneOutcome {
   mode?: CloneMode;
   /** The folder has files but no repo, so attaching needs the user's go-ahead first. */
   needsAttachConfirm?: boolean;
+  /** The user stopped it. The folder was put back the way it was. */
+  cancelled?: boolean;
+}
+
+export interface CloneRunOptions {
+  onProgress?: (progress: CloneProgress) => void;
+  /** Stops the clone or fetch partway, and the folder is put back the way it was. */
+  signal?: AbortSignal;
+}
+
+const STOPPED: CloneOutcome = { ok: false, cancelled: true, message: 'Clone stopped.' };
+
+/** Runs a clone or fetch with `--progress` and feeds what git prints to `onProgress`. */
+async function gitWithProgress(
+  folder: string,
+  args: string[],
+  { onProgress, signal }: CloneRunOptions,
+): Promise<void> {
+  const parser = createCloneProgressParser();
+  await gitStream(folder, args, {
+    timeoutMs: CLONE_TIMEOUT_MS,
+    signal,
+    onStderr: (chunk) => {
+      const progress = parser.push(chunk);
+      if (progress) onProgress?.(progress);
+    },
+  });
 }
 
 /** The folder's entries, minus OS clutter. A folder that doesn't exist yet has none. */
@@ -114,7 +142,11 @@ async function emptyFolder(folder: string): Promise<void> {
  * Clones `url` into `folder`. The folder may not exist yet. One that already holds a repo is
  * left alone, and one with files in it is refused, since git would refuse it anyway.
  */
-export async function cloneIntoFolder(folder: string, url: string): Promise<CloneOutcome> {
+export async function cloneIntoFolder(
+  folder: string,
+  url: string,
+  options: CloneRunOptions = {},
+): Promise<CloneOutcome> {
   await mkdir(folder, { recursive: true });
   if (await isGitRepo(folder)) {
     return { ok: true, message: 'Folder is already a git repository.', mode: 'skipped' };
@@ -129,14 +161,16 @@ export async function cloneIntoFolder(folder: string, url: string): Promise<Clon
 
   const credentials = await githubCredentialArgs();
   try {
-    await git(folder, [...credentials, 'clone', url, '.'], CLONE_TIMEOUT_MS);
+    await gitWithProgress(folder, [...credentials, 'clone', '--progress', url, '.'], options);
   } catch (error) {
     // A clone that was killed or failed halfway leaves a partial checkout, and a retry
     // would then be refused as "not empty". The folder was empty, so empty it again.
     await emptyFolder(folder);
-    return { ok: false, message: describeCloneError(error) };
+    return options.signal?.aborted ? STOPPED : { ok: false, message: describeCloneError(error) };
   }
   if (credentials.length > 0) await rememberGithubHelper(folder);
+  // Git only draws the checkout bar when it is slow, so a quick one ends short of 100.
+  options.onProgress?.({ phase: 'checkout', percent: 100 });
   return { ok: true, message: `Cloned ${stripRemoteCredentials(url)}.`, mode: 'cloned' };
 }
 
@@ -167,7 +201,11 @@ async function remoteDefaultBranch(folder: string, credentials: string[]): Promi
  * that match GitHub look clean and anything that differs shows up as a change. If any step
  * fails, the `.git` this created is removed and the folder is exactly as it was.
  */
-export async function attachFolderToRemote(folder: string, url: string): Promise<CloneOutcome> {
+export async function attachFolderToRemote(
+  folder: string,
+  url: string,
+  options: CloneRunOptions = {},
+): Promise<CloneOutcome> {
   if (await isGitRepo(folder)) {
     return { ok: true, message: 'Folder is already a git repository.', mode: 'skipped' };
   }
@@ -176,7 +214,7 @@ export async function attachFolderToRemote(folder: string, url: string): Promise
   try {
     await git(folder, ['init']);
     await git(folder, ['remote', 'add', 'origin', url]);
-    await git(folder, [...credentials, 'fetch', 'origin'], CLONE_TIMEOUT_MS);
+    await gitWithProgress(folder, [...credentials, 'fetch', '--progress', 'origin'], options);
 
     const branch = await remoteDefaultBranch(folder, credentials);
     if (credentials.length > 0) await rememberGithubHelper(folder);
@@ -192,6 +230,7 @@ export async function attachFolderToRemote(folder: string, url: string): Promise
     // --mixed moves the branch and the index only. Nothing on disk changes.
     await git(folder, ['reset', '--mixed', '--quiet', `origin/${branch}`]);
     await git(folder, ['branch', `--set-upstream-to=origin/${branch}`, branch]);
+    options.onProgress?.({ phase: 'checkout', percent: 100 });
     return {
       ok: true,
       message: `Connected to ${stripRemoteCredentials(url)} on ${branch}. Your files were kept, and any differences show as changes.`,
@@ -199,8 +238,17 @@ export async function attachFolderToRemote(folder: string, url: string): Promise
     };
   } catch (error) {
     await rm(join(folder, '.git'), { recursive: true, force: true }).catch(() => undefined);
-    return { ok: false, message: describeCloneError(error) };
+    return options.signal?.aborted ? STOPPED : { ok: false, message: describeCloneError(error) };
   }
+}
+
+/**
+ * What a clone into `folder` would do: nothing (already a repo), a plain clone (empty or
+ * missing, OS clutter aside), or an attach that keeps the files (and so needs a yes first).
+ */
+export async function inspectCloneFolder(folder: string): Promise<'repo' | 'empty' | 'files'> {
+  if (await isGitRepo(folder)) return 'repo';
+  return (await meaningfulEntries(folder)).length === 0 ? 'empty' : 'files';
 }
 
 /**
@@ -211,11 +259,12 @@ export async function cloneOrAttach(
   folder: string,
   url: string,
   attach: boolean,
+  options: CloneRunOptions = {},
 ): Promise<CloneOutcome> {
   if (await isGitRepo(folder)) {
     return { ok: true, message: 'Folder is already a git repository.', mode: 'skipped' };
   }
-  if ((await meaningfulEntries(folder)).length === 0) return cloneIntoFolder(folder, url);
+  if ((await meaningfulEntries(folder)).length === 0) return cloneIntoFolder(folder, url, options);
   if (!attach) {
     return {
       ok: false,
@@ -223,5 +272,5 @@ export async function cloneOrAttach(
       message: 'This folder already has files. Confirm to connect it to the repository.',
     };
   }
-  return attachFolderToRemote(folder, url);
+  return attachFolderToRemote(folder, url, options);
 }

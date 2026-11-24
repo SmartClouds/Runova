@@ -587,8 +587,8 @@ export function ProjectFormDialog({
                 {willClone && (
                   <p className="text-xs leading-relaxed text-muted-foreground">
                     {folderPath.trim()
-                      ? `Will clone into ${folderPath.trim()} on Create (folder must be empty). A private repo needs the GitHub CLI signed in (gh auth login). If the folder already has files or the clone fails, use Clone from GitHub on the project's Git tab.`
-                      : 'Choose a folder above: the repo will be cloned into it on Create.'}
+                      ? `Will clone into ${folderPath.trim()} after Create, in the background, so you can keep working while it downloads. If the folder already has files, you'll be asked before they are connected. A private repo needs the GitHub CLI signed in (gh auth login).`
+                      : 'Choose a folder above: the repo will be cloned into it after Create.'}
                   </p>
                 )}
               </Field>

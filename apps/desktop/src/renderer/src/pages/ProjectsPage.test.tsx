@@ -1,8 +1,10 @@
 import type { Project } from '@runova/core';
 import { AGENT_TYPE_LABELS } from '@runova/core';
-import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import type { CloneJob } from '@shared/apiTypes';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { useLocation } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { useCloneJobsStore } from '@/stores/cloneJobsStore';
 import { useProjectCleanupStore } from '@/stores/projectCleanupStore';
 import { renderWithProviders } from '../../../test/renderer/renderWithProviders';
 
@@ -57,6 +59,23 @@ function project(overrides: Partial<Project> = {}): Project {
     archived: false,
     createdAt: '2025-01-01T00:00:00.000Z',
     updatedAt: '2025-01-02T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function cloneJob(overrides: Partial<CloneJob> = {}): CloneJob {
+  return {
+    id: 'j1',
+    projectId: 'p9',
+    projectName: 'Apollo',
+    repoUrl: 'https://github.com/me/my-app',
+    repoLabel: 'me/my-app',
+    folderPath: 'C:\\code\\apollo',
+    attach: false,
+    status: 'running',
+    phase: 'receiving',
+    percent: 40,
+    startedAt: Date.now(),
     ...overrides,
   };
 }
@@ -386,17 +405,32 @@ describe('ProjectsPage GitHub auto-clone', () => {
     expect(await within(dialog).findByText(/Will clone into/)).toBeTruthy();
   });
 
-  it('clones into the folder before creating, then lands on the Git tab', async () => {
-    const created = project({ id: 'p9', repoUrl: 'https://github.com/me/my-app' });
-    const { user, bridge } = renderWithProviders(<ProjectsPage />, {
-      route: '/projects',
-      path: 'projects',
-      bridge: {
-        'projects.pickFolder': async () => 'C:\\code\\apollo',
-        'git.cloneInto': async () => ({ ok: true, message: 'Cloned.' }),
-        'projects.create': async () => created,
+  it('creates the project at once and clones in the background, with progress on its card', async () => {
+    const created = project({ id: 'p9', name: 'apollo', repoUrl: 'https://github.com/me/my-app' });
+    let listed: Project[] = [];
+    const { user, bridge } = renderWithProviders(
+      <>
+        <ProjectsPage />
+        <LocationProbe />
+      </>,
+      {
+        route: '/projects',
+        path: 'projects',
+        bridge: {
+          'projects.list': async () => listed,
+          'projects.pickFolder': async () => 'C:\\code\\apollo',
+          'projects.create': async () => {
+            listed = [created];
+            return created;
+          },
+          'git.startClone': async () => ({
+            ok: true,
+            message: 'Cloning.',
+            job: cloneJob({ projectId: 'p9', projectName: 'apollo' }),
+          }),
+        },
       },
-    });
+    );
     await screen.findByText('No projects yet');
     await user.click(screen.getAllByRole('button', { name: /New Project/ })[0]);
     const dialog = await screen.findByRole('dialog');
@@ -408,31 +442,52 @@ describe('ProjectsPage GitHub auto-clone', () => {
     await user.click(createButton(dialog));
 
     await waitFor(() =>
-      expect(bridge.$fn('git.cloneInto')).toHaveBeenCalledWith({
-        folderPath: 'C:\\code\\apollo',
+      expect(bridge.$fn('git.startClone')).toHaveBeenCalledWith({
+        projectId: 'p9',
         repoUrl: 'https://github.com/me/my-app',
       }),
     );
     expect(bridge.$fn('projects.create')).toHaveBeenCalledWith(
       expect.objectContaining({ repoUrl: 'https://github.com/me/my-app' }),
     );
-    await waitFor(() =>
-      expect(toast.success).toHaveBeenCalledWith('Project created and repository cloned.'),
+    // The dialog is gone and the user stays on Projects, where the new card shows the clone.
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(await screen.findByRole('progressbar', { name: 'Cloning me/my-app' })).toHaveAttribute(
+      'aria-valuenow',
+      '40',
     );
-    // A successful clone lands on the Git tab so Fetch/Pull are one click away.
-    await waitFor(() => expect(screen.queryByRole('button', { name: 'Apollo' })).toBeNull());
+    expect(screen.getByLabelText('Location')).toHaveTextContent(/^\/projects$/);
+    expect(toast.success).not.toHaveBeenCalled();
   });
 
-  it('still creates the project when the clone fails, and lands on the Git tab to retry', async () => {
-    const created = project({ id: 'p10', name: 'Apollo' });
+  it('holds Run back on a card until its clone is done, and follows the clone as it moves', async () => {
+    useCloneJobsStore.getState().setJobs([cloneJob({ projectId: 'p1', percent: 64 })]);
+    renderWithProviders(<ProjectsPage />, {
+      bridge: { 'projects.list': [project({ id: 'p1' })] },
+    });
+
+    const bar = await screen.findByRole('progressbar', { name: 'Cloning me/my-app' });
+    expect(bar).toHaveAttribute('aria-valuenow', '64');
+    expect(screen.getByRole('button', { name: 'Run' })).toBeDisabled();
+
+    act(() =>
+      useCloneJobsStore
+        .getState()
+        .setJobs([cloneJob({ projectId: 'p1', status: 'succeeded', percent: 100 })]),
+    );
+    expect(screen.getByRole('button', { name: 'Run' })).toBeEnabled();
+  });
+
+  it('keeps the project when the clone cannot start, and says why', async () => {
+    const created = project({ id: 'p10', name: 'apollo' });
     const { user, bridge } = renderWithProviders(<ProjectsPage />, {
       route: '/projects',
       path: 'projects',
       bridge: {
         'projects.pickFolder': async () => 'C:\\code\\apollo',
-        'git.cloneInto': async () => ({
+        'git.startClone': async () => ({
           ok: false,
-          message: 'Folder is not empty. Choose an empty folder to clone into.',
+          message: 'That address cannot be cloned. Use a github.com/owner/repo link.',
         }),
         'projects.create': async () => created,
       },
@@ -449,17 +504,35 @@ describe('ProjectsPage GitHub auto-clone', () => {
     await user.type(within(dialog).getByLabelText(/Git repository/), 'github.com/me/my-app');
     await user.click(createButton(dialog));
 
-    await waitFor(() => expect(bridge.$fn('git.cloneInto')).toHaveBeenCalled());
+    await waitFor(() => expect(bridge.$fn('git.startClone')).toHaveBeenCalled());
     await waitFor(() =>
       expect(toast.error).toHaveBeenCalledWith(
-        'Project created, but the clone failed: Folder is not empty. Choose an empty folder to clone into.',
-        { description: 'Use Clone from GitHub on the Git tab to try again.' },
+        'That address cannot be cloned. Use a github.com/owner/repo link.',
       ),
     );
     expect(bridge.$fn('projects.create')).toHaveBeenCalled();
-    expect(toast.success).not.toHaveBeenCalledWith('Project created.');
-    // The retry lives on the Git tab, so a failed clone lands there too.
-    await waitFor(() => expect(screen.queryByRole('button', { name: 'Apollo' })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+
+  it('just creates a project that has no GitHub address', async () => {
+    const created = project({ id: 'p11', name: 'apollo' });
+    const { user, bridge } = renderWithProviders(<ProjectsPage />, {
+      bridge: {
+        'projects.pickFolder': async () => 'C:\\code\\apollo',
+        'projects.create': async () => created,
+      },
+    });
+    await screen.findByText('No projects yet');
+    await user.click(screen.getAllByRole('button', { name: /New Project/ })[0]);
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: /Browse/ }));
+    await waitFor(() =>
+      expect((within(dialog).getByLabelText(/^Name/) as HTMLInputElement).value).toBe('apollo'),
+    );
+    await user.click(createButton(dialog));
+
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Project created.'));
+    expect(() => bridge.$fn('git.startClone')).toThrow();
   });
 });
 

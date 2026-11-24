@@ -13,6 +13,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { CliLogo } from '@/components/cliLogos';
+import { CloneProgressCard } from '@/components/clone/CloneProgressCard';
+import { runClone } from '@/components/clone/runClone';
 import {
   Archive,
   ArchiveRestore,
@@ -52,10 +54,13 @@ import { queryKeys } from '@/lib/queryKeys';
 import { persianTextProps } from '@/lib/rtl';
 import { timeAgo } from '@/lib/time';
 import { cn } from '@/lib/utils';
+import { useCloneJobForProject } from '@/stores/cloneJobsStore';
 import { usePageHeader } from '@/stores/pageHeaderStore';
 import { useProjectCleanupStore } from '@/stores/projectCleanupStore';
 
 const VIEW_STORAGE_KEY = 'runova.projects.view';
+/** How long a just-created project stays lit up. */
+const HIGHLIGHT_MS = 1800;
 const MAX_VISIBLE_TAGS = 3;
 const AGENT_TYPE_ORDER = Object.keys(AGENT_TYPE_LABELS) as AgentType[];
 
@@ -99,6 +104,8 @@ export default function ProjectsPage(): React.JSX.Element {
   const searchRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
   const { requestRun, runPicker } = useProjectRun();
+  /** The project just created, brought into view and lit up for a moment. */
+  const [highlightId, setHighlightId] = useState<string | null>(null);
   const reduceMotion = useReducedMotion();
   const pillTransition = reduceMotion
     ? { duration: 0 }
@@ -122,6 +129,16 @@ export default function ProjectsPage(): React.JSX.Element {
       setSearchParams(searchParams, { replace: true });
     }
   }, [searchParams, setSearchParams]);
+
+  // The new item appears once the list refetches, so the lighting up waits for it.
+  const highlightShown = projectsQuery.data?.some((project) => project.id === highlightId) ?? false;
+  useEffect(() => {
+    if (!highlightId || !highlightShown) return;
+    const item = document.querySelector<HTMLElement>(`[data-project-id="${highlightId}"]`);
+    item?.scrollIntoView?.({ block: 'nearest', behavior: reduceMotion ? 'auto' : 'smooth' });
+    const timer = window.setTimeout(() => setHighlightId(null), HIGHLIGHT_MS);
+    return () => window.clearTimeout(timer);
+  }, [highlightId, highlightShown, reduceMotion]);
 
   useEffect(() => {
     try {
@@ -151,43 +168,25 @@ export default function ProjectsPage(): React.JSX.Element {
   }, [dialogOpen, promptBuildOpen, reviewOpen]);
 
   const createMutation = useMutation({
-    mutationFn: async (
-      values: ProjectFormValues,
-    ): Promise<{ project: Project; cloned: boolean; cloneError: string | null }> => {
-      let cloned = false;
-      let cloneError: string | null = null;
-      const repo = values.repoUrl?.trim();
-      // Auto-clone ("Clone into Folder"): a GitHub address is cloned into the chosen
-      // folder before the record is created. A failed clone never blocks creation: the
-      // address is kept, and the Git tab offers Clone from GitHub to retry.
-      if (repo && isClonableGithubUrl(repo)) {
-        try {
-          const result = await window.runova.git.cloneInto({
-            folderPath: values.folderPath,
-            repoUrl: repo,
-          });
-          if (result.ok) cloned = !result.skipped;
-          else cloneError = result.message;
-        } catch (error) {
-          cloneError = error instanceof Error ? error.message : 'Clone failed.';
-        }
-      }
+    mutationFn: async (values: ProjectFormValues): Promise<{ project: Project; repo: string }> => {
       const project = await window.runova.projects.create(values);
-      return { project, cloned, cloneError };
+      return { project, repo: values.repoUrl?.trim() ?? '' };
     },
-    onSuccess: ({ project, cloned, cloneError }) => {
-      if (cloneError) {
-        toast.error(`Project created, but the clone failed: ${cloneError}`, {
-          description: 'Use Clone from GitHub on the Git tab to try again.',
-        });
-      } else {
-        toast.success(cloned ? 'Project created and repository cloned.' : 'Project created.');
-      }
+    // The dialog closes as soon as the record exists, so nothing should cover the page.
+    meta: { silentLoading: true },
+    onSuccess: ({ project, repo }) => {
       setDialogOpen(false);
+      if (project) setHighlightId(project.id);
       void queryClient.invalidateQueries({ queryKey: queryKeys.projects });
-      // Land on the Git tab after a clone so Fetch and Pull are one click away, and after a
-      // failed one so the retry is right there instead of in a toast that has gone.
-      if (cloned || cloneError) navigate(`/projects/${project.id}?tab=git`);
+      // A GitHub address is cloned into the folder in the background ("Clone into Folder"):
+      // the new card shows the progress, the status bar follows it on every page, and a toast
+      // says how it ended. A clone that fails or can't start leaves the project in place, and
+      // the Git tab offers Clone from GitHub to retry.
+      if (project && repo && isClonableGithubUrl(repo)) {
+        void runClone({ projectId: project.id, repoUrl: repo });
+        return;
+      }
+      toast.success('Project created.');
     },
   });
 
@@ -311,6 +310,7 @@ export default function ProjectsPage(): React.JSX.Element {
       view,
       draggable: dragEnabled,
       motion,
+      highlighted: project.id === highlightId,
       onNavigate: () => navigate(`/projects/${project.id}`),
       onOpenGit: () => navigate(`/projects/${project.id}?tab=git`),
       onOpenCleanup: () => navigate(`/projects/${project.id}?tab=cleanup`),
@@ -753,6 +753,8 @@ function FilterChip({
 interface ProjectItemProps {
   project: Project;
   view: ProjectsView;
+  /** Just created: lit up for a moment so the eye finds it. */
+  highlighted?: boolean;
   /** False while a search or agent filter hides part of the order, so the grip can't reorder. */
   draggable: boolean;
   motion: ReorderMotion;
@@ -837,10 +839,12 @@ function ProjectCard(props: ProjectItemProps): React.JSX.Element {
   const { project, motion, onNavigate } = props;
   const description = persianTextProps(project.description);
   const extraTags = Math.max(0, project.tags.length - MAX_VISIBLE_TAGS);
+  const cloneJob = useCloneJobForProject(project.id);
 
   return (
     <Card
       {...motion.itemProps}
+      data-project-id={project.id}
       className={cn(
         CARD_SHAPE,
         'group relative flex cursor-pointer flex-col',
@@ -850,6 +854,7 @@ function ProjectCard(props: ProjectItemProps): React.JSX.Element {
           : 'glass transition-[transform,box-shadow,opacity] duration-200 ease-out motion-reduce:transition-none',
         // A ring rather than a border colour: the card's glass edge is unlayered CSS and would win.
         'hover:-translate-y-0.5 hover:ring-1 hover:ring-primary/30 focus-within:ring-1 focus-within:ring-primary/30 motion-reduce:hover:translate-y-0',
+        props.highlighted && 'ring-2 ring-primary/50',
       )}
       onClick={onNavigate}
     >
@@ -902,9 +907,10 @@ function ProjectCard(props: ProjectItemProps): React.JSX.Element {
           <ProjectStorageChip projectId={project.id} onOpen={props.onOpenCleanup} />
           <DependencyAlertsChip projectId={project.id} onOpen={props.onOpenPackages} />
         </div>
+        {cloneJob ? <CloneProgressCard job={cloneJob} variant="compact" /> : null}
       </div>
       <div className={cn(CARD_FOOTER, 'mt-auto')}>
-        <RunButton project={project} onRun={props.onRun} />
+        <RunButton project={project} onRun={props.onRun} cloning={cloneJob?.status === 'running'} />
         <span className="min-w-0 truncate text-[11px] tabular-nums text-muted-foreground">
           Updated {timeAgo(project.updatedAt)}
         </span>
@@ -917,14 +923,17 @@ function ProjectCard(props: ProjectItemProps): React.JSX.Element {
 function ProjectRow(props: ProjectItemProps): React.JSX.Element {
   const { project, onNavigate, motion } = props;
   const description = persianTextProps(project.description);
+  const cloneJob = useCloneJobForProject(project.id);
 
   return (
     // Rows share one card, so each is a plain row with the menu's hover wash rather than a box.
     // A dragged row lifts off the card while the rows around it slide out of its way.
     <div
       {...motion.itemProps}
+      data-project-id={project.id}
       className={cn(
         'group relative flex cursor-pointer items-center gap-3 px-3 py-2.5 focus-within:bg-foreground/[0.04]',
+        props.highlighted && 'rounded-lg bg-primary/[0.06]',
         motion.dragging
           ? 'z-10 rounded-lg bg-popover shadow-lg ring-1 ring-foreground/10 transition-none'
           : 'transition-[transform,background-color,opacity] duration-200 ease-out hover:bg-foreground/[0.04] motion-reduce:transition-none',
@@ -952,7 +961,15 @@ function ProjectRow(props: ProjectItemProps): React.JSX.Element {
           </button>
           <ProjectQuickActions {...props} compact />
         </div>
-        <div className="mt-0.5 flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+        {cloneJob ? (
+          <CloneProgressCard job={cloneJob} variant="compact" className="mt-1 max-w-md" />
+        ) : null}
+        <div
+          className={cn(
+            'mt-0.5 flex min-w-0 items-center gap-2 text-xs text-muted-foreground',
+            cloneJob && 'hidden',
+          )}
+        >
           <span className="shrink-0 tabular-nums">Updated {timeAgo(project.updatedAt)}</span>
           {project.description ? (
             <span
@@ -973,7 +990,12 @@ function ProjectRow(props: ProjectItemProps): React.JSX.Element {
       <div className="hidden shrink-0 md:block">
         <AgentBadge project={project} />
       </div>
-      <RunButton project={project} onRun={props.onRun} iconOnly />
+      <RunButton
+        project={project}
+        onRun={props.onRun}
+        iconOnly
+        cloning={cloneJob?.status === 'running'}
+      />
       <ProjectSecondaryActions {...props} />
     </div>
   );
@@ -1107,25 +1129,35 @@ function RunButton({
   project,
   onRun,
   iconOnly = false,
+  cloning = false,
 }: {
   project: Project;
   onRun: () => void;
   iconOnly?: boolean;
+  /** The folder is still being filled, so there is nothing to run yet. */
+  cloning?: boolean;
 }): React.JSX.Element {
   const commands = configuredRunCommands(project);
-  const label =
-    commands.length === 0
+  const label = cloning
+    ? 'Available once the clone finishes'
+    : commands.length === 0
       ? 'No run command yet. Click to create one with AI.'
       : commands.length === 1
         ? projectRunCommandHint(commands[0])
         : 'Choose which command to run';
   return (
-    <SimpleTooltip label={label}>
+    <SimpleTooltip label={label} wrapTrigger={cloning}>
       <Button
         size={iconOnly ? 'icon' : undefined}
         variant={iconOnly ? 'soft' : 'default'}
         aria-label={iconOnly ? 'Run' : undefined}
-        className={cn('shrink-0', iconOnly && 'hover:text-primary')}
+        disabled={cloning}
+        className={cn(
+          'shrink-0',
+          iconOnly && 'hover:text-primary',
+          // The disabled look alone hardly shows on the bright default button.
+          cloning && 'opacity-40 shadow-none saturate-50',
+        )}
         onClick={(e) => {
           e.stopPropagation();
           onRun();

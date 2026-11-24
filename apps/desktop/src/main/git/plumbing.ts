@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { normalize } from 'node:path';
 import { promisify } from 'node:util';
 import { parseWorktreeList } from '@runova/core';
@@ -12,6 +12,7 @@ import type {
   GitStatus,
   GitTagInfo,
 } from '../../shared/apiTypes';
+import { killProcessTree } from '../process/spawnStreaming';
 import { isRunningUnderRosetta, isXcrunArchMismatch, ROSETTA_GIT_MESSAGE } from '../system/rosetta';
 import { ghApi, isGhCliAvailable, parseGithubRemote } from './githubCli';
 import { splitTagPrefix, tagHasPrefix } from './versioning';
@@ -21,6 +22,10 @@ const GIT_TIMEOUT_MS = 30000;
 /** Pushing a whole project for the first time can take a while on a slow line. */
 export const PUSH_TIMEOUT_MS = 180000;
 const MAX_DIFF_CHARS = 8000;
+/** Same ceiling as execFile's maxBuffer for git(). */
+const MAX_STREAM_STDOUT = 10 * 1024 * 1024;
+/** Progress redraws add up on a big clone. The reason for a failure is always near the end. */
+const MAX_STREAM_STDERR = 64 * 1024;
 
 const HISTORY_COMMIT_LIMIT = 100;
 /** How far back the contribution grid goes, for both the git and the GitHub views. */
@@ -114,6 +119,113 @@ export async function git(
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
+}
+
+export interface GitStreamOptions {
+  timeoutMs?: number;
+  signal?: AbortSignal;
+  /** Gets stderr as git writes it, which is where `--progress` output goes. */
+  onStderr?: (chunk: string) => void;
+}
+
+/** What a failed `gitStream` rejects with, shaped like execFile's error so callers can share code. */
+export interface GitStreamError extends Error {
+  stderr: string;
+  stdout: string;
+  code: number | null;
+  /** The run was stopped (timeout or abort) rather than failing on its own. */
+  killed: boolean;
+}
+
+function streamError(message: string, fields: Omit<GitStreamError, keyof Error>): GitStreamError {
+  return Object.assign(new Error(message), fields);
+}
+
+/**
+ * `git()` for long commands whose progress the user should see, such as a clone. Unlike
+ * execFile it hands stderr over while git runs, and an abort or timeout takes down git's own
+ * children too (remote-https, index-pack), so nothing keeps writing into the folder afterwards.
+ */
+export function gitStream(
+  cwd: string,
+  args: string[],
+  options: GitStreamOptions = {},
+): Promise<string> {
+  const { timeoutMs = GIT_TIMEOUT_MS, signal, onStderr } = options;
+  if (signal?.aborted) {
+    return Promise.reject(
+      streamError('git was stopped before it started.', {
+        stderr: '',
+        stdout: '',
+        code: null,
+        killed: true,
+      }),
+    );
+  }
+  return new Promise((resolve, reject) => {
+    const child = spawn('git', ['-C', cwd, ...args], {
+      env: gitEnv(),
+      windowsHide: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      // Its own process group on macOS and Linux, so killProcessTree can signal all of it.
+      detached: process.platform !== 'win32',
+    });
+    let stdout = '';
+    let stderr = '';
+    let killed = false;
+    let settled = false;
+
+    const stop = (): void => {
+      if (settled || killed) return;
+      killed = true;
+      killProcessTree(child);
+    };
+    const timer = setTimeout(stop, timeoutMs);
+    signal?.addEventListener('abort', stop, { once: true });
+
+    const finish = (error: GitStreamError | null): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', stop);
+      if (error) reject(error);
+      else resolve(stdout);
+    };
+
+    child.stdout?.setEncoding('utf-8');
+    child.stderr?.setEncoding('utf-8');
+    child.stdout?.on('data', (chunk: string) => {
+      if (stdout.length < MAX_STREAM_STDOUT) stdout += chunk;
+    });
+    child.stderr?.on('data', (chunk: string) => {
+      stderr += chunk;
+      if (stderr.length > MAX_STREAM_STDERR) stderr = stderr.slice(-MAX_STREAM_STDERR);
+      if (!killed) onStderr?.(chunk);
+    });
+    child.on('error', (error) => {
+      finish(streamError(error.message, { stderr, stdout, code: null, killed }));
+    });
+    // A stopped git is done once it exits. Waiting for 'close' as well would wait on any
+    // grandchild that still holds the pipes (an MSYS shell from a credential helper, say).
+    child.on('exit', (code) => {
+      if (!killed) return;
+      child.stdout?.destroy();
+      child.stderr?.destroy();
+      finish(streamError('git was stopped.', { stderr, stdout, code, killed }));
+    });
+    child.on('close', (code) => {
+      if (code === 0 && !killed) {
+        finish(null);
+        return;
+      }
+      if (isXcrunArchMismatch(stderr) && isRunningUnderRosetta()) {
+        finish(streamError(ROSETTA_GIT_MESSAGE, { stderr, stdout, code, killed }));
+        return;
+      }
+      const reason = killed ? 'git was stopped.' : `git exited with code ${code}.`;
+      finish(streamError(reason, { stderr, stdout, code, killed }));
+    });
+  });
 }
 
 /**

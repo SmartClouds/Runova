@@ -11,6 +11,7 @@ import {
 import { Toaster, toast } from 'sonner';
 import { AiAccessApprovalHost } from './components/aiAccess/AiAccessApprovalHost';
 import { ConfirmDialogHost } from './components/ConfirmDialog';
+import { CloneJobNotifier } from './components/clone/CloneJobNotifier';
 import { StopContainersDialogHost } from './components/docker/StopContainersDialog';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { WritingMenuHost } from './components/grammar/WritingMenuHost';
@@ -60,6 +61,7 @@ import VaultPage from './pages/VaultPage';
 import { queryClient } from './queryClient';
 import { initAnywhere } from './stores/anywhereStore';
 import { initDefaultCli } from './stores/cliStore';
+import { initCloneJobs } from './stores/cloneJobsStore';
 import { initDashboardLayout } from './stores/dashboardLayoutStore';
 import { initFileSend } from './stores/fileSendStore';
 import { initPingTargets } from './stores/pingTargetsStore';
@@ -147,6 +149,7 @@ function AppChrome(): React.JSX.Element | null {
       <HostKeyChangedDialogHost />
       <QuitConfirmation />
       <FileSendToasts />
+      <CloneJobNotifier />
       <ImageViewerHost />
       <UpdateManager />
     </>
@@ -167,6 +170,8 @@ export default function App(): React.JSX.Element {
     const stopAnywhereLinks = initAnywhereLinks();
     // Sending files (E112): the main window and the incoming files window follow the same state.
     const stopFileSend = initFileSend();
+    // Background clones (New Project, Clone from GitHub) run in main and outlive any page.
+    const stopCloneJobs = initCloneJobs();
     // Usage threshold alerts prefer an OS notification; main only falls back
     // to this event when the platform has none to show. The OS notification's own
     // click already opens Usage there, so this toast gets the same shortcut.
@@ -190,6 +195,7 @@ export default function App(): React.JSX.Element {
       stopAnywhere();
       stopAnywhereLinks();
       stopFileSend();
+      stopCloneJobs();
     };
   }, []);
 

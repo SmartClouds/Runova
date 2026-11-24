@@ -152,10 +152,7 @@ import type {
   ChatSessionSpec,
   ChatSubscribeResult,
   CleanupAfterMergeInput,
-  CloneIntoInput,
-  CloneIntoResult,
-  CloneProjectInput,
-  CloneProjectResult,
+  CloneJob,
   CommandPrerequisite,
   ConfirmationForwardedPayload,
   ConnectRemoteInput,
@@ -338,6 +335,8 @@ import type {
   SshPasswordPromptPayload,
   SshSavedServer,
   SshVaultStatus,
+  StartCloneInput,
+  StartCloneResult,
   StartHostInput,
   StartRdpAgentTaskInput,
   StartSshAgentTaskInput,
@@ -1801,12 +1800,16 @@ const git = {
   /** Origin's URL for a folder path, as a browsable link. Null when there isn't one. */
   detectRemote: (folderPath: string): Promise<string | null> =>
     ipcRenderer.invoke(IPC.git.detectRemote, folderPath),
-  /** Clones a GitHub repo into the New Project folder. Never throws: check `ok`. */
-  cloneInto: (input: CloneIntoInput): Promise<CloneIntoResult> =>
-    ipcRenderer.invoke(IPC.git.cloneInto, input),
-  /** Clones the project's repo into its folder, or attaches a folder that has files. Never throws. */
-  cloneProject: (input: CloneProjectInput): Promise<CloneProjectResult> =>
-    ipcRenderer.invoke(IPC.git.cloneProject, input),
+  /**
+   * Starts cloning the project's repo in the background (or attaching a folder that has files,
+   * once confirmed). Never throws: check `ok`. Progress arrives through `onCloneJobs`.
+   */
+  startClone: (input: StartCloneInput): Promise<StartCloneResult> =>
+    ipcRenderer.invoke(IPC.git.startClone, input),
+  cloneJobs: (): Promise<CloneJob[]> => ipcRenderer.invoke(IPC.git.cloneJobs),
+  cancelClone: (id: string): Promise<boolean> => ipcRenderer.invoke(IPC.git.cancelClone, id),
+  dismissClone: (id: string): Promise<boolean> => ipcRenderer.invoke(IPC.git.dismissClone, id),
+  onCloneJobs: (cb: (jobs: CloneJob[]) => void) => subscribe(IPC.git.onCloneJobs, cb),
   /** Asks main to watch this project's `.git`, so outside commits reach the open Git tab. */
   watchRepo: (projectId: string): Promise<void> => ipcRenderer.invoke(IPC.git.watchRepo, projectId),
   unwatchRepo: (projectId: string): Promise<void> =>
