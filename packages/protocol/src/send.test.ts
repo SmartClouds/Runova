@@ -141,6 +141,7 @@ describe('file chunks and transfer keys', () => {
 
     expect(toHex(encoded)).toBe(chunk.frame);
     const decoded = decodeFileChunk(fromHex(chunk.frame));
+    if (!decoded) throw new Error('the frame did not decode');
     expect(decoded.transferKey).toBe(chunk.transferKey);
     expect(decoded.partIndex).toBe(chunk.partIndex);
     expect(decoded.seq).toBe(chunk.seq);

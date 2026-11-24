@@ -47,8 +47,10 @@ internal sealed class MonitorAssigner(
         await using (var transaction = await db.Database.BeginTransactionAsync(ct))
         {
             await db.Database.ExecuteSqlAsync($"SELECT pg_advisory_xact_lock({LockKey})", ct);
+            // Locked too: a heartbeat or a connect writes the node row outside the advisory lock, and the
+            // AssignmentVersion bump below would then fail on the row version (xmin, not part of *).
             var nodes = await db.MonitoringNodes
-                .Where(n => n.Status != NodeStatuses.Revoked && n.Status != NodeStatuses.Pending)
+                .FromSql($"SELECT *, xmin FROM \"MonitoringNodes\" WHERE \"Status\" <> {NodeStatuses.Revoked} AND \"Status\" <> {NodeStatuses.Pending} ORDER BY \"Id\" FOR UPDATE")
                 .ToListAsync(ct);
             var fresh = time.GetUtcNow() - options.Value.OfflineAfter;
             var slots = nodes.Select(n => CloudMonitorMapper.ToSlot(n, Eligible(n, fresh))).ToList();
