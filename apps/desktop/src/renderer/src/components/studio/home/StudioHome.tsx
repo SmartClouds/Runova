@@ -1,7 +1,6 @@
 import type { VideoSummary } from '@runova/studio';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
-import { projectOption } from '@/components/projects/projectOptions';
 import { listProjects, studioClient } from '../client';
 import { errorMessage } from '../format';
 import {
@@ -11,6 +10,7 @@ import {
   Combobox,
   FolderPlus,
   Plus,
+  projectOption,
   SEGMENT_TRACK,
   segmentClass,
   TOOLBAR,
