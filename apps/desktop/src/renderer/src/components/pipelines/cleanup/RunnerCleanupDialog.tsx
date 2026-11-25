@@ -1,7 +1,7 @@
 import type { RunnerCleanupDisk, RunnerCleanupScan, RunnerMachineLink } from '@shared/apiTypes';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { Broom, Check, CircleCheck, Lock, RefreshCw, Spinner } from '@/components/icons';
+import { Broom, CircleCheck, Lock, RefreshCw, Spinner } from '@/components/icons';
 import { Notice } from '@/components/pageKit/Notice';
 import { PillTabs } from '@/components/pageKit/PillTabs';
 import { SshVaultUnlockDialog } from '@/components/remote/SshVaultUnlockDialog';
@@ -25,6 +25,7 @@ import {
   useRunnerCleanupStore,
 } from '@/stores/runnerCleanupStore';
 import { CleanupItemList } from './CleanupItemList';
+import { CleanupLoading } from './CleanupLoading';
 import { CleanupScheduleForm } from './CleanupScheduleForm';
 import {
   cleanupConfirm,
@@ -37,56 +38,7 @@ import {
 /** A scan older than this is read again when the dialog opens, since jobs keep writing. */
 const STALE_MS = 5 * 60_000;
 
-const STEPS = [
-  { step: 'runners', label: 'Finding runner folders' },
-  { step: 'docker', label: 'Checking Docker' },
-  { step: 'caches', label: 'Measuring package caches' },
-  { step: 'schedule', label: 'Reading the scheduled job' },
-] as const;
-
 type Tab = 'clean' | 'schedule';
-
-function ScanSteps({ seen }: { seen: string[] }): React.JSX.Element {
-  // A step is done once the next one has started; the last one seen is the one running.
-  const current = seen.at(-1);
-  return (
-    <div aria-live="polite" className="flex flex-col gap-3 py-2">
-      <ol className="flex flex-col gap-2">
-        {STEPS.map(({ step, label }, index) => {
-          const reached = seen.includes(step);
-          const running = step === current || (!current && index === 0);
-          const done = reached && !running;
-          return (
-            <li key={step} className="flex items-center gap-2.5 text-[13px]">
-              <span
-                className={cn(
-                  'flex h-5 w-5 items-center justify-center rounded-full',
-                  done
-                    ? 'bg-success/15 text-success'
-                    : 'bg-foreground/[0.06] text-muted-foreground',
-                )}
-              >
-                {done ? (
-                  <Check className="h-2.5 w-2.5" />
-                ) : running ? (
-                  <Spinner className="h-2.5 w-2.5 animate-spin text-primary" />
-                ) : (
-                  <span className="h-1.5 w-1.5 rounded-full bg-current opacity-50" />
-                )}
-              </span>
-              <span className={cn(done || running ? 'text-foreground' : 'text-muted-foreground')}>
-                {label}
-              </span>
-            </li>
-          );
-        })}
-      </ol>
-      <p className="text-xs text-muted-foreground">
-        Measuring big work folders and caches can take a minute.
-      </p>
-    </div>
-  );
-}
 
 function DiskBar({
   disk,
@@ -376,9 +328,7 @@ export function RunnerCleanupDialog({
         onSaved={(next) => setScheduleState(machine, next)}
       />
     ) : scanning ? (
-      <p className="py-6 text-sm text-muted-foreground">
-        Reading the scheduled job from the machine…
-      </p>
+      <CleanupLoading tab="schedule" seen={state.steps} machineName={machineName} />
     ) : (
       <Problem
         state={state}
@@ -388,7 +338,7 @@ export function RunnerCleanupDialog({
       />
     );
   } else if (scanning) {
-    body = <ScanSteps seen={state.steps} />;
+    body = <CleanupLoading tab="clean" seen={state.steps} machineName={machineName} />;
   } else if (scan) {
     body = (
       <Findings
@@ -409,7 +359,7 @@ export function RunnerCleanupDialog({
       />
     );
   } else {
-    body = <ScanSteps seen={[]} />;
+    body = <CleanupLoading tab="clean" seen={[]} machineName={machineName} />;
   }
 
   const showFooter = tab === 'clean' && (scanning || scan !== null);

@@ -82,6 +82,17 @@ describe('RunnerCleanupDialog', () => {
     expect(await screen.findByText('Up to 3.00 GB can be freed')).toBeInTheDocument();
   });
 
+  it('shows the scan on the schedule tab too, then the job form', async () => {
+    const answer = deferred<RunnerCleanupScanResult>();
+    open({ 'runnerCleanup.scan': () => answer.promise });
+    fireEvent.click(screen.getByRole('button', { name: 'Schedule' }));
+    expect(await screen.findByRole('progressbar', { name: 'Scan progress' })).toBeInTheDocument();
+    expect(screen.getByText('Scanning build server')).toBeInTheDocument();
+    answer.resolve({ ok: true, scan });
+    expect(await screen.findByText('No scheduled cleanup yet')).toBeInTheDocument();
+    expect(screen.queryByRole('progressbar', { name: 'Scan progress' })).not.toBeInTheDocument();
+  });
+
   it('shows the disk, the notes and the findings, with the safe picks made', async () => {
     open({ 'runnerCleanup.scan': async () => ({ ok: true, scan }) });
     expect(await screen.findByText('80.0 GB of 100 GB used on /')).toBeInTheDocument();
