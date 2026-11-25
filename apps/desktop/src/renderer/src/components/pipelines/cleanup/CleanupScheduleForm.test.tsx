@@ -1,8 +1,19 @@
 import type { RunnerCleanupSchedule, RunnerCleanupScheduleState } from '@shared/apiTypes';
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { renderWithProviders } from '../../../../../test/renderer/renderWithProviders';
 import { CleanupScheduleForm } from './CleanupScheduleForm';
+
+vi.mock('@/lib/timeOfDay', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/timeOfDay')>()),
+  systemHourCycle: () => 12,
+}));
+
+function pick(column: string, option: string): void {
+  fireEvent.click(
+    within(screen.getByRole('listbox', { name: column })).getByRole('option', { name: option }),
+  );
+}
 
 const SSH = { kind: 'ssh' as const, serverId: 's1' };
 
@@ -40,7 +51,7 @@ describe('CleanupScheduleForm', () => {
     expect(screen.getByText(/a cron job on build server/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Weekly' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: 'Sun' })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByLabelText('Time')).toHaveValue('03:00');
+    expect(screen.getByRole('button', { name: 'Time' })).toHaveTextContent('3:00 AM');
     expect(screen.getByRole('checkbox', { name: 'Temporary files' })).toBeChecked();
     expect(screen.getByRole('button', { name: 'Save job' })).toBeEnabled();
     expect(screen.queryByRole('button', { name: 'Remove job' })).not.toBeInTheDocument();
@@ -52,7 +63,12 @@ describe('CleanupScheduleForm', () => {
       'runnerCleanup.saveSchedule': async () => ({ ok: true, state }),
     });
     fireEvent.click(screen.getByRole('button', { name: 'Daily' }));
-    fireEvent.change(screen.getByLabelText('Time'), { target: { value: '22:45' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Time' }));
+    pick('Hour', '10');
+    pick('Minute', '45');
+    pick('AM or PM', 'PM');
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(screen.getByRole('button', { name: 'Time' })).toHaveTextContent('10:45 PM');
     fireEvent.click(screen.getByRole('checkbox', { name: 'Package caches' }));
     fireEvent.change(screen.getByLabelText('Runner logs older than, in days'), {
       target: { value: '21' },

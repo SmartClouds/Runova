@@ -14,6 +14,7 @@ import { ipcErrorMessage } from '@/components/projects/environments/ipcError';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import { TimePicker } from '@/components/ui/time-picker';
 import { formatBytes } from '@/lib/format';
 import { timeAgo } from '@/lib/time';
 import { cn } from '@/lib/utils';
@@ -232,19 +233,15 @@ export function CleanupScheduleForm({
             value={draft.frequency}
             onChange={(frequency) => setDraft((current) => ({ ...current, frequency }))}
           />
-          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
             at
-            <Input
-              type="time"
+            <TimePicker
               aria-label="Time"
               value={draft.time}
-              required
-              onChange={(event) =>
-                setDraft((current) => ({ ...current, time: event.target.value }))
-              }
-              className="h-7 w-[6.5rem] text-xs tabular-nums"
+              onChange={(time) => setDraft((current) => ({ ...current, time }))}
+              className="h-7 gap-1.5 pl-2.5 pr-2 text-xs text-foreground"
             />
-          </label>
+          </span>
         </div>
         {draft.frequency === 'weekly' ? (
           <PillTabs
