@@ -67,6 +67,13 @@ const REPEAT_DELAY_MS = 400;
 const REPEAT_EVERY_MS = 60;
 
 /**
+ * Font Awesome sizes its icons in em from a stylesheet that beats h-/w- utilities, so the
+ * chevrons are sized through their font size: about 12px on the standard 36px field, never
+ * under 6px however short the field gets.
+ */
+const CHEVRON_SIZE = 'shrink-0 text-[length:max(6px,36cqh)]';
+
+/**
  * A number field whose step buttons are ours: the shell carries the border and any width the
  * caller asked for, the input sits inside it borderless, and the chevrons step the value the
  * way the native arrows would. The buttons fill the pill's rounded right end, split in half, so
@@ -141,12 +148,15 @@ const NumberInput = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes
           {...props}
         />
         {steppable && (
-          <span className="ml-1 flex w-6 shrink-0 flex-col border-l border-foreground/[0.08]">
+          // The column takes the shell's height, its width follows from that, and the chevrons
+          // are a share of it (cqh), so a shorter field gets smaller arrows without the caller
+          // saying so.
+          <span className="ml-1 flex aspect-[2/3] shrink-0 flex-col border-l border-foreground/[0.08] [container-type:size]">
             <StepButton label="Increase value" disabled={atMax} onStep={() => step('up')}>
-              <ChevronUp className="h-2.5 w-2.5" />
+              <ChevronUp className={CHEVRON_SIZE} />
             </StepButton>
             <StepButton label="Decrease value" disabled={atMin} onStep={() => step('down')}>
-              <ChevronDown className="h-2.5 w-2.5" />
+              <ChevronDown className={CHEVRON_SIZE} />
             </StepButton>
           </span>
         )}
