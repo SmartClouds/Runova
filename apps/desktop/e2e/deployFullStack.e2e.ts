@@ -166,6 +166,11 @@ for (const image of IMAGES) {
       await pick.getByRole('button', { name: 'Save' }).click();
       const rail = app.getByRole('navigation', { name: 'Servers' });
       await expect(rail.getByText(NICKNAME)).toBeVisible({ timeout: 30_000 });
+      // A first connection: the wizard's check asks to trust the host key before the login is sent.
+      const firstContact = app.getByRole('dialog', { name: `Check ${NICKNAME}’s host key` });
+      await expect(firstContact).toBeVisible({ timeout: 60_000 });
+      await firstContact.getByRole('button', { name: 'Trust and connect' }).click();
+      await expect(firstContact).toBeHidden();
       // A fresh server: the core is new, so the owner is created with it.
       const install = app.getByRole('button', { name: /^Install core / });
       await expect(install).toBeVisible({ timeout: 2 * MINUTE });
