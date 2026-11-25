@@ -156,6 +156,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: runova-android
+          retention-days: 7 # a copy goes on the GitHub Release
           path: apps/mobile/android/dist/*
 
       # The desktop workflow creates the release, and it may still be building.

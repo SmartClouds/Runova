@@ -134,6 +134,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: server-core-release
+          retention-days: 7 # only passes files between jobs; the release keeps its own copy
           if-no-files-found: error
           path: |
             apps/server-core/artifacts/release/*.tar.gz
@@ -145,6 +146,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: server-core-manifest
+          retention-days: 7 # only passes files between jobs; the release keeps its own copy
           if-no-files-found: error
           path: apps/server-core/artifacts/release/server-core-manifest.json
 
@@ -267,6 +269,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: wordpress-connector
+          retention-days: 7 # only passes files between jobs; the release keeps its own copy
           path: apps/wordpress-connector/dist/runova-connector.zip
           if-no-files-found: error
 
@@ -321,6 +324,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: desktop-installer-${{ matrix.os }}
+          retention-days: 7 # only passes files between jobs; the release keeps its own copy
           if-no-files-found: ignore
           path: |
             apps/desktop/release/*.exe
@@ -418,6 +422,8 @@ jobs:
 
       - name: Build and push
         id: push
+        env:
+          DOCKER_BUILD_RECORD_UPLOAD: false # keep build records off the shared artifact storage
         uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.context }}
