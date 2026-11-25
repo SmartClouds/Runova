@@ -86,6 +86,7 @@ export {
   segmentClass,
   TOOLBAR,
 } from '@/components/pageKit';
+export { noProjectOption, projectOption } from '@/components/projects/projectOptions';
 export { SshVaultUnlockDialog as VaultUnlockDialog } from '@/components/remote/SshVaultUnlockDialog';
 export { AgentPromptField } from '@/components/terminal/AgentPromptField';
 export { Button } from '@/components/ui/button';

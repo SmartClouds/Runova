@@ -9,7 +9,6 @@ import {
 } from '@runova/studio';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useId, useState } from 'react';
-import { noProjectOption, projectOption } from '@/components/projects/projectOptions';
 import { BriefFields, type BriefValue, customStyleOf, styleReady } from '../ai/BriefFields';
 import {
   fromRunInput,
@@ -36,6 +35,8 @@ import {
   Input,
   Label,
   Notice,
+  noProjectOption,
+  projectOption,
   SEGMENT_TRACK,
   Switch,
   segmentClass,
