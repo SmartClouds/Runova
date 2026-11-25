@@ -181,7 +181,8 @@ jobs:
     # source is a fresh clone outside the shared workspace, every tool is downloaded into this job's
     # own temp folder and checked against a pinned SHA-256, the shell, git and PATH are the system's
     # own, and Cargo and Xcode build from scratch. The App Store Connect key only reaches the step
-    # that uploads, and the token is read-only.
+    # that uploads, and the token is read-only. The archive is signed for the App Store only, so
+    # the Apple team needs no registered iPhone.
     runs-on: [self-hosted, macOS, ARM64]
     # Everything is built from nothing, including the three release-profile LTO builds of the core.
     timeout-minutes: 240
@@ -296,6 +297,11 @@ jobs:
         run: |
           export PATH="$RELEASE_PATH"
           cd "$RELEASE_SRC/apps/mobile/ios"
+          # It goes into sed and the entitlements below, so it has to look like a Team ID.
+          if ! [[ "$TEAM_ID" =~ ^[A-Z0-9]{10}$ ]]; then
+            echo "::error::APPLE_TEAM_ID is not a ten-character Team ID. See docs/mobile-release-setup.md."
+            exit 1
+          fi
           version="$(node ../../../scripts/mobile-version.mjs "$TAG")"
           eval "$version"
           key="$RELEASE_TOOLS/AuthKey.p8"
@@ -305,23 +311,94 @@ jobs:
             -authenticationKeyID "$KEY_ID" -authenticationKeyIssuerID "$ISSUER_ID")
           # Its own DerivedData and package folder, not the ones CI's builds leave in ~/Library.
           built=(-derivedDataPath "$RELEASE_TOOLS/DerivedData" -clonedSourcePackagesDirPath "$RELEASE_TOOLS/SourcePackages")
-          # Automatic signing, so Xcode makes a profile for each target (the app and its
-          # notification extension) with the API key. The settings here apply to both targets.
-          # XcodeGen only sets an identity on the app, hence CODE_SIGN_IDENTITY.
+          archive="$RUNNER_TEMP/Runova.xcarchive"
+          group="$TEAM_ID.com.runovahq.app.shared"
+
+          # Archived unsigned, then signed once, for the App Store, by the export (as CuraLink
+          # does). Signing the archive would make automatic signing get a development profile
+          # first, and Apple only issues those to a team with a registered device ("Your team has
+          # no devices from which to generate a provisioning profile"). The App Store profile
+          # needs none. Signing is also what normally fills in AppIdentifierPrefix, which both
+          # Info.plists use for the shared keychain group, so it is given here.
           xcodebuild archive -project Runova.xcodeproj -scheme Runova \
-            -destination "generic/platform=iOS" -archivePath "$RUNNER_TEMP/Runova.xcarchive" \
-            DEVELOPMENT_TEAM="$TEAM_ID" CODE_SIGN_STYLE=Automatic CODE_SIGN_IDENTITY="Apple Development" \
-            MARKETING_VERSION="$VERSION_NAME" CURRENT_PROJECT_VERSION="$VERSION_CODE" "${auth[@]}" "${built[@]}"
+            -destination "generic/platform=iOS" -archivePath "$archive" \
+            CODE_SIGNING_ALLOWED=NO AppIdentifierPrefix="$TEAM_ID." \
+            MARKETING_VERSION="$VERSION_NAME" CURRENT_PROJECT_VERSION="$VERSION_CODE" "${built[@]}"
+
+          # The export keeps the entitlements it finds in each binary's signature, and an unsigned
+          # archive has none, so the App Store build would quietly lose push, passkeys, Sign in
+          # with Apple and the shared keychain. An ad-hoc signature carries them into the archive
+          # without a profile, and the export replaces it. XcodeGen writes the files with
+          # $(AppIdentifierPrefix), which only a signing build fills in, and with push set to
+          # development, so each is resolved first. The extension goes first because codesign
+          # refuses a bundle whose nested code is unsigned.
+          app="$archive/Products/Applications/Runova.app"
+          adhoc() { # bundle entitlements
+            local resolved
+            resolved="$RUNNER_TEMP/$(basename "$2")"
+            sed "s/[$](AppIdentifierPrefix)/$TEAM_ID./g" "$2" > "$resolved"
+            if /usr/libexec/PlistBuddy -c 'Print :aps-environment' "$resolved" > /dev/null 2>&1; then
+              /usr/libexec/PlistBuddy -c 'Set :aps-environment production' "$resolved"
+            fi
+            plutil -lint -s "$resolved"
+            if [ -d "$1/Frameworks" ]; then
+              find "$1/Frameworks" -maxdepth 1 \( -name '*.framework' -o -name '*.dylib' \) \
+                -exec codesign --force --sign - --timestamp=none {} +
+            fi
+            codesign --force --sign - --timestamp=none --entitlements "$resolved" "$1"
+          }
+          adhoc "$app/PlugIns/RunovaNotifications.appex" RunovaNotifications/RunovaNotifications.entitlements
+          adhoc "$app" Runova/Runova.entitlements
+
           # The version comes from the tag, so Xcode must not renumber the build on its way up.
-          cat > "$RUNNER_TEMP/export.plist" <<PLIST
+          export_to() { # destination folder
+            cat > "$RUNNER_TEMP/export-$1.plist" <<PLIST
           <?xml version="1.0" encoding="UTF-8"?>
           <plist version="1.0"><dict>
           <key>method</key><string>app-store-connect</string>
-          <key>destination</key><string>upload</string>
+          <key>destination</key><string>$1</string>
           <key>teamID</key><string>$TEAM_ID</string>
           <key>signingStyle</key><string>automatic</string>
           <key>manageAppVersionAndBuildNumber</key><false/>
           </dict></plist>
           PLIST
-          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/Runova.xcarchive" \
-            -exportOptionsPlist "$RUNNER_TEMP/export.plist" -exportPath "$RUNNER_TEMP/export" "${auth[@]}"
+            xcodebuild -exportArchive -archivePath "$archive" \
+              -exportOptionsPlist "$RUNNER_TEMP/export-$1.plist" -exportPath "$2" "${auth[@]}"
+          }
+
+          # Signed into a folder first, to check what the App Store signature kept before anything
+          # reaches TestFlight. An App ID without a capability drops that entitlement with no
+          # error, and the feature then just fails on the phone.
+          export_to export "$RUNNER_TEMP/export"
+          ipas=("$RUNNER_TEMP"/export/*.ipa)
+          if [ ! -f "${ipas[0]}" ]; then
+            echo "::error::The export made no .ipa in $RUNNER_TEMP/export."
+            exit 1
+          fi
+          unzip -q "${ipas[0]}" -d "$RUNNER_TEMP/unpacked"
+          signed="$RUNNER_TEMP/unpacked/Payload/Runova.app"
+          extension="$signed/PlugIns/RunovaNotifications.appex"
+          check() { # bundle text what-to-do
+            local entitlements
+            entitlements=$(codesign -d --entitlements - --xml "$1" 2>/dev/null || true)
+            if ! grep -qF "$2" <<< "$entitlements"; then
+              echo "::error::$(basename "$1") was signed without $2. $3"
+              exit 1
+            fi
+          }
+          capability() { echo "Turn on $1 for com.runovahq.app in the Apple developer account (docs/mobile-release-setup.md), then run this again."; }
+          check "$signed" "<key>aps-environment</key>" "$(capability "Push Notifications")"
+          check "$signed" "webcredentials:runovahq.com" "$(capability "Associated Domains")"
+          check "$signed" "com.apple.developer.applesignin" "$(capability "Sign in with Apple")"
+          check "$signed" "$group" "The ad-hoc signing above did not carry the keychain group."
+          check "$extension" "$group" "The ad-hoc signing above did not carry the keychain group."
+          for bundle in "$signed" "$extension"; do
+            read_group=$(plutil -extract RunovaKeychainGroup raw -o - "$bundle/Info.plist" || true)
+            if [ "$read_group" != "$group" ]; then
+              echo "::error::$(basename "$bundle") reads its keychain group as '$read_group', not $group."
+              exit 1
+            fi
+          done
+
+          # The upload signs the same archive the same way, so TestFlight gets what was checked.
+          export_to upload "$RUNNER_TEMP/upload"

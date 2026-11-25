@@ -20,17 +20,14 @@ App IDs, then App, and register these two as Explicit:
 
 | Description | Bundle ID | Capabilities |
 |---|---|---|
-| Runova | `com.runovahq.app` | Push Notifications |
+| Runova | `com.runovahq.app` | Push Notifications, Associated Domains, Sign in with Apple |
 | Runova Notifications | `com.runovahq.app.notifications` | none |
 
 The shared keychain group (`$(AppIdentifierPrefix)com.runovahq.app.shared`) needs no registration. It
 works because both App IDs belong to the same team.
 
-On [Devices](https://developer.apple.com/account/resources/devices/list), register at least one
-iPhone (press +, then give it a name and the phone's UDID, which Finder or Xcode's Devices window
-shows when the phone is plugged in). CD archives with development signing first and re-signs for the
-App Store on export, and Apple makes no development profile for a team without a device. Without one
-the iOS job stops with "Your team has no devices from which to generate a provisioning profile".
+No iPhone has to be registered on Devices. CD archives the app unsigned and signs it only once, for
+the App Store, and that profile needs no device. Testers come in through TestFlight.
 
 ```
 gh secret set APPLE_TEAM_ID --repo SmartClouds/Runova --body "<team id>"
