@@ -1,4 +1,4 @@
-import { quoteIdentifier, quoteLiteral } from '@runova/core';
+import { quoteIdentifier } from '@runova/core';
 import type {
   DbHealthReport,
   DbIndexHealth,
@@ -16,7 +16,11 @@ import { DriverError, type DriverSchemaGraph } from './types';
  * switches to the database first, so the catalog views and DMVs read that database.
  */
 
-export type MssqlRows = (text: string) => Promise<Record<string, unknown>[]>;
+/** Runs one batch with its values bound to the @names in `params`. */
+export type MssqlRows = (
+  text: string,
+  params?: Readonly<Record<string, string>>,
+) => Promise<Record<string, unknown>[]>;
 
 const PAGE = 8192;
 /** Enterprise and Developer (3), Azure SQL Database (5) and Managed Instance (8). */
@@ -25,9 +29,21 @@ const ONLINE_EDITIONS = new Set([3, 5, 8]);
 const num = (value: unknown): number | null =>
   value === null || value === undefined || value === '' ? null : Number(value);
 
-function scoped(database: string, schema: string | null, body: (filter: string) => string) {
-  const filter = schema === null ? '' : ` AND s.name = ${quoteLiteral('mssql', schema)}`;
-  return `USE ${quoteIdentifier('mssql', database)};\n${body(filter)}`;
+/**
+ * Runs a catalog query in one database, narrowed to one schema when one is named. The database
+ * cannot be a parameter (USE takes a name), so it is a quoted identifier; the schema is bound.
+ */
+function scoped(
+  rows: MssqlRows,
+  database: string,
+  schema: string | null,
+  body: (filter: string) => string,
+): Promise<Record<string, unknown>[]> {
+  const filter = schema === null ? '' : ' AND s.name = @schema';
+  return rows(
+    `USE ${quoteIdentifier('mssql', database)};\n${body(filter)}`,
+    schema === null ? {} : { schema },
+  );
 }
 
 function columnType(row: Record<string, unknown>): string {
@@ -49,23 +65,22 @@ export async function mssqlSchemaGraph(
   schema: string | null,
 ): Promise<DriverSchemaGraph> {
   const [tables, columns, keys] = await Promise.all([
-    rows(
-      scoped(
-        database,
-        schema,
-        (filter) => `SELECT s.name AS [schema], t.name AS name,
+    scoped(
+      rows,
+      database,
+      schema,
+      (filter) => `SELECT s.name AS [schema], t.name AS name,
        (SELECT SUM(p.rows) FROM sys.partitions p
          WHERE p.object_id = t.object_id AND p.index_id IN (0, 1)) AS rows
   FROM sys.tables t JOIN sys.schemas s ON s.schema_id = t.schema_id
  WHERE t.is_ms_shipped = 0${filter}
  ORDER BY s.name, t.name`,
-      ),
     ),
-    rows(
-      scoped(
-        database,
-        schema,
-        (filter) => `SELECT s.name AS [schema], t.name AS [table], c.name AS name, ty.name AS type,
+    scoped(
+      rows,
+      database,
+      schema,
+      (filter) => `SELECT s.name AS [schema], t.name AS [table], c.name AS name, ty.name AS type,
        c.max_length, c.precision, c.scale, c.is_nullable,
        CASE WHEN EXISTS (
          SELECT 1 FROM sys.index_columns ic
@@ -78,15 +93,14 @@ export async function mssqlSchemaGraph(
   JOIN sys.types ty ON ty.user_type_id = c.user_type_id
  WHERE t.is_ms_shipped = 0${filter}
  ORDER BY s.name, t.name, c.column_id`,
-      ),
     ),
-    rows(
-      scoped(
-        database,
-        schema,
-        (
-          filter,
-        ) => `SELECT fk.name, s.name AS from_schema, ft.name AS from_table, fc.name AS from_column,
+    scoped(
+      rows,
+      database,
+      schema,
+      (
+        filter,
+      ) => `SELECT fk.name, s.name AS from_schema, ft.name AS from_table, fc.name AS from_column,
        ts.name AS to_schema, tt.name AS to_table, tc.name AS to_column,
        fk.delete_referential_action_desc AS on_delete, fk.update_referential_action_desc AS on_update
   FROM sys.foreign_keys fk
@@ -99,7 +113,6 @@ export async function mssqlSchemaGraph(
   JOIN sys.columns tc ON tc.object_id = fkc.referenced_object_id AND tc.column_id = fkc.referenced_column_id
  WHERE 1 = 1${filter}
  ORDER BY s.name, ft.name, fk.name, fkc.constraint_column_id`,
-      ),
     ),
   ]);
 
@@ -185,13 +198,13 @@ export async function mssqlHealth(
   let physical: Record<string, unknown>[];
   try {
     // One row per index: partitions are added up, fragmentation weighted by their pages.
-    physical = await rows(
-      scoped(
-        database,
-        schema,
-        (
-          filter,
-        ) => `SELECT s.name AS [schema], t.name AS [table], i.name AS name, i.index_id, i.type_desc,
+    physical = await scoped(
+      rows,
+      database,
+      schema,
+      (
+        filter,
+      ) => `SELECT s.name AS [schema], t.name AS [table], i.name AS name, i.index_id, i.type_desc,
        i.is_unique, i.is_primary_key,
        SUM(ps.avg_fragmentation_in_percent * ps.page_count) / NULLIF(SUM(ps.page_count), 0) AS frag,
        SUM(ps.page_count) AS pages
@@ -202,7 +215,6 @@ export async function mssqlHealth(
  WHERE ps.alloc_unit_type_desc = 'IN_ROW_DATA' AND ps.index_level = 0 AND t.is_ms_shipped = 0${filter}
  GROUP BY s.name, t.name, i.name, i.index_id, i.type_desc, i.is_unique, i.is_primary_key
  ORDER BY s.name, t.name, i.index_id`,
-      ),
     );
   } catch (error) {
     if (permissionProblem(error)) {
@@ -213,18 +225,17 @@ export async function mssqlHealth(
     throw error;
   }
 
-  const keyColumns = await rows(
-    scoped(
-      database,
-      schema,
-      (filter) => `SELECT ic.index_id, s.name AS [schema], t.name AS [table], c.name AS column_name
+  const keyColumns = await scoped(
+    rows,
+    database,
+    schema,
+    (filter) => `SELECT ic.index_id, s.name AS [schema], t.name AS [table], c.name AS column_name
   FROM sys.index_columns ic
   JOIN sys.columns c ON c.object_id = ic.object_id AND c.column_id = ic.column_id
   JOIN sys.tables t ON t.object_id = ic.object_id
   JOIN sys.schemas s ON s.schema_id = t.schema_id
  WHERE ic.is_included_column = 0 AND ic.key_ordinal > 0 AND t.is_ms_shipped = 0${filter}
  ORDER BY s.name, t.name, ic.index_id, ic.key_ordinal`,
-    ),
   );
   const columnsOf = new Map<string, string[]>();
   for (const row of keyColumns) {
@@ -248,11 +259,11 @@ export async function mssqlHealth(
     };
   });
 
-  const storage = await rows(
-    scoped(
-      database,
-      schema,
-      (filter) => `SELECT s.name AS [schema], t.name AS [table],
+  const storage = await scoped(
+    rows,
+    database,
+    schema,
+    (filter) => `SELECT s.name AS [schema], t.name AS [table],
        SUM(CASE WHEN ps.index_id IN (0, 1) THEN ps.row_count ELSE 0 END) AS rows,
        SUM(CASE WHEN ps.index_id IN (0, 1) THEN ps.used_page_count ELSE 0 END) * ${PAGE} AS data_bytes,
        SUM(CASE WHEN ps.index_id > 1 THEN ps.used_page_count ELSE 0 END) * ${PAGE} AS index_bytes,
@@ -263,7 +274,6 @@ export async function mssqlHealth(
  WHERE t.is_ms_shipped = 0${filter}
  GROUP BY s.name, t.name
  ORDER BY s.name, t.name`,
-    ),
   );
   const tables = storage.map((row): DbTableStorage => {
     const data = num(row.data_bytes) ?? 0;

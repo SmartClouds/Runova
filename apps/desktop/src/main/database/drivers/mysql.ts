@@ -3,6 +3,7 @@ import {
   limitStatement,
   qualifiedName,
   quoteIdentifier,
+  quoteLiteral,
   splitStatements,
 } from '@runova/core';
 import mysql from 'mysql2/promise';
@@ -148,23 +149,27 @@ export async function openMysql(options: DriverConnectOptions): Promise<DbDriver
     current = database;
   };
 
+  // Every query that carries a value goes through execute(), a prepared statement the server
+  // binds. query() with values only formats them into the text on this side, with backslash
+  // escapes that a server in NO_BACKSLASH_ESCAPES mode reads differently, so a quote could end
+  // the string early.
   const describeTable = async (ref: DbObjectRef): Promise<DbTableDescription> => {
     const database = ref.database ?? current;
     if (!database) throw new DriverError('Pick a database first.');
-    const [tables] = await connection.query<mysql.RowDataPacket[]>(
+    const [tables] = await connection.execute<mysql.RowDataPacket[]>(
       'SELECT TABLE_TYPE AS type, TABLE_ROWS AS estimate FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?',
       [database, ref.name],
     );
     const found = tables[0];
     if (!found) throw new DriverError(`There is no table ${database}.${ref.name}.`);
-    const [columns] = await connection.query<mysql.RowDataPacket[]>(
+    const [columns] = await connection.execute<mysql.RowDataPacket[]>(
       `SELECT COLUMN_NAME AS name, COLUMN_TYPE AS type, IS_NULLABLE AS nullable,
               COLUMN_DEFAULT AS defaultValue, COLUMN_KEY AS columnKey, EXTRA AS extra
          FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?
         ORDER BY ORDINAL_POSITION`,
       [database, ref.name],
     );
-    const [stats] = await connection.query<mysql.RowDataPacket[]>(
+    const [stats] = await connection.execute<mysql.RowDataPacket[]>(
       `SELECT INDEX_NAME AS name, NON_UNIQUE AS nonUnique, COLUMN_NAME AS columnName
          FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?
         ORDER BY INDEX_NAME = 'PRIMARY' DESC, INDEX_NAME, SEQ_IN_INDEX`,
@@ -266,7 +271,7 @@ export async function openMysql(options: DriverConnectOptions): Promise<DbDriver
         );
       }
       const database = parent.database ?? parent.name;
-      const [rows] = await connection.query<mysql.RowDataPacket[]>(
+      const [rows] = await connection.execute<mysql.RowDataPacket[]>(
         `SELECT TABLE_NAME AS name, TABLE_TYPE AS type, TABLE_ROWS AS estimate
            FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? ORDER BY TABLE_NAME`,
         [database],
@@ -295,7 +300,12 @@ export async function openMysql(options: DriverConnectOptions): Promise<DbDriver
     async readRows(input: Omit<DbReadRowsInput, 'sessionId'>): Promise<DbRowsPage> {
       const table = await describeTable(input.ref);
       const ref = table.ref;
-      const sql = buildReadRows(engine, ref, input);
+      const sql = buildReadRows(
+        engine,
+        ref,
+        input,
+        table.columns.map((column) => column.name),
+      );
       const started = Date.now();
       await connection.query('START TRANSACTION READ ONLY');
       try {
@@ -363,6 +373,24 @@ export async function openMysql(options: DriverConnectOptions): Promise<DbDriver
       }
     },
 
+    async applyEdits(statements) {
+      await connection.beginTransaction();
+      try {
+        let affectedRows = 0;
+        for (const statement of statements) {
+          const [header] = await connection.execute<mysql.ResultSetHeader>(statement.text, [
+            ...statement.params,
+          ]);
+          affectedRows += header.affectedRows ?? 0;
+        }
+        await connection.commit();
+        return { affectedRows };
+      } catch (error) {
+        await connection.rollback().catch(() => undefined);
+        throw new DriverError(describeError(error));
+      }
+    },
+
     async settings(): Promise<DbSetting[]> {
       const [rows] = await connection.query<mysql.RowDataPacket[]>('SHOW GLOBAL VARIABLES');
       return rows.map((row) => ({
@@ -387,10 +415,12 @@ export async function openMysql(options: DriverConnectOptions): Promise<DbDriver
         const host = String(row.host);
         let grants: string[] = [];
         try {
-          const [shown] = await connection.query<mysql.RowDataPacket[]>('SHOW GRANTS FOR ?@?', [
-            user,
-            host,
-          ]);
+          // SHOW GRANTS cannot be prepared, so it cannot take a parameter. quoteLiteral doubles
+          // quotes (and backslashes) rather than escaping them with a backslash, so the name
+          // stays inside its string whether or not the server is in NO_BACKSLASH_ESCAPES mode.
+          const [shown] = await connection.query<mysql.RowDataPacket[]>(
+            `SHOW GRANTS FOR ${quoteLiteral(engine, user)}@${quoteLiteral(engine, host)}`,
+          );
           grants = shown.map((one) => String(Object.values(one)[0] ?? ''));
         } catch {
           // Not allowed to see another user's grants; the name and host are still worth listing.

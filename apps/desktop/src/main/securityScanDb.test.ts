@@ -9,6 +9,7 @@ import type {
 } from '@runova/core';
 import { DEFAULT_SCAN_OPTIONS } from '@runova/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ALWAYS_TRUE, hostileSqlValues } from '../test/main/hostileSqlInput';
 import { useTempUserData } from '../test/main/ipcHarness';
 
 /**
@@ -290,5 +291,48 @@ describe('remove', () => {
 
     expect(() => db.remove('no-such-scan')).not.toThrow();
     expect(db.list('alpha')).toHaveLength(1);
+  });
+});
+
+describe('hostile input is data, never SQL', () => {
+  const hostile = hostileSqlValues('security_scans');
+
+  it('stores hostile text verbatim and reads each scan back only through its own project', async () => {
+    const db = await loadDb();
+    const bystander = record({ id: 'plain', projectId: 'plain' });
+    db.add(bystander);
+    const added = hostile.map((text) =>
+      db.add(
+        record({
+          id: text,
+          projectId: text,
+          projectName: text,
+          findings: [finding({ title: text, file: text, excerpt: text })],
+          runs: [run({ log: text, error: text })],
+        }),
+      ),
+    );
+
+    for (const [index, text] of hostile.entries()) {
+      expect(db.get(text)).toEqual(added[index]);
+      expect(db.latest(text)).toEqual(added[index]);
+      expect(db.list(text).map((one) => one.id)).toEqual([text]);
+    }
+    expect(db.get('plain')).toEqual(bystander);
+    expect(db.list('plain').map((one) => one.id)).toEqual(['plain']);
+  });
+
+  it('prunes and removes only within the project and id it is given', async () => {
+    const db = await loadDb();
+    db.add(record({ id: 'plain', projectId: 'plain' }));
+    // A save for a project whose id would match every row if it were pasted into the SQL must
+    // prune only its own history.
+    db.add(record({ id: 'odd', projectId: ALWAYS_TRUE }));
+
+    for (const text of hostile) db.remove(text);
+
+    expect(db.get('plain')?.id).toBe('plain');
+    expect(db.get('odd')?.id).toBe('odd');
+    expect(db.latest(ALWAYS_TRUE)?.id).toBe('odd');
   });
 });

@@ -128,6 +128,19 @@ function orderKeys(parsed: Extract<ParsedConnectionUrl, { host: string }>): Pars
 }
 
 /**
+ * A host as it goes into a URL: an IPv6 address in brackets, and anything else with every
+ * character that would end the host (/, ?, #, @, :) percent-encoded, so a host name can never
+ * carry a path, options or a second address into the URL.
+ */
+export function urlHost(host: string): string {
+  const bare = host.replace(/^\[(.*)\]$/, '$1');
+  if (bare.includes(':') && /^[0-9A-Fa-f:.]+(%[A-Za-z0-9_.-]+)?$/.test(bare)) {
+    return `[${bare.replace('%', '%25')}]`;
+  }
+  return encodeURIComponent(host);
+}
+
+/**
  * Writes a connection back as a URL. The password is left out unless `withPassword` asks for
  * it, which only an explicit reveal does; that URL also names the Mongo auth database, so it
  * can be pasted into an app as it is.
@@ -154,5 +167,5 @@ export function formatConnectionUrl(
     options.withPassword && connection.authDatabase
       ? `?authSource=${encodeURIComponent(connection.authDatabase)}`
       : '';
-  return `${scheme}://${user}${connection.host}${port}${database}${auth}`;
+  return `${scheme}://${user}${urlHost(connection.host)}${port}${database}${auth}`;
 }

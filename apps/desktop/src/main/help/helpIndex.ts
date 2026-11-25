@@ -72,6 +72,17 @@ function rowToChunk(row: ChunkRow): HelpChunk {
   };
 }
 
+const VEC_TABLE_NAME = /^vec_[0-9a-f]{12}$/;
+
+/**
+ * A vec0 table's name goes into SQL text (identifiers cannot be parameters), and it is read back
+ * from the file, which anything on the machine can edit. Only the shape `vecTable` makes is let
+ * through. Anything else is treated as no table at all.
+ */
+function checkedVecName(name: unknown): string | null {
+  return typeof name === 'string' && VEC_TABLE_NAME.test(name) ? name : null;
+}
+
 /** One quoted prefix term per meaningful word, OR-ed together, so no user text can break FTS5's syntax. */
 function ftsQuery(query: string): string {
   return searchTerms(query)
@@ -182,19 +193,25 @@ export class HelpIndex {
   }
 
   private vecTables(): Array<{ embedder: string; name: string; dim: number }> {
-    return this.db.prepare('SELECT embedder, name, dim FROM vec_tables').all() as Array<{
+    const rows = this.db.prepare('SELECT embedder, name, dim FROM vec_tables').all() as Array<{
       embedder: string;
-      name: string;
+      name: unknown;
       dim: number;
     }>;
+    return rows.flatMap((row) => {
+      const name = checkedVecName(row.name);
+      return name ? [{ ...row, name }] : [];
+    });
   }
 
   /** The vec0 table for an embedder, created on first use. Its name is derived, never user text. */
   private vecTable(embedder: string, dim: number): string | null {
     const row = this.db
       .prepare('SELECT name, dim FROM vec_tables WHERE embedder = ?')
-      .get(embedder) as { name: string; dim: number } | undefined;
-    if (row) return row.dim === dim ? row.name : null;
+      .get(embedder) as { name: unknown; dim: number } | undefined;
+    if (row) return row.dim === dim ? checkedVecName(row.name) : null;
+    // The size goes into the table's definition, so it has to be a plain positive integer.
+    if (!Number.isSafeInteger(dim) || dim <= 0) return null;
     const name = `vec_${createHash('sha1').update(embedder).digest('hex').slice(0, 12)}`;
     this.db.exec(
       `CREATE VIRTUAL TABLE IF NOT EXISTS ${name} USING vec0(embedding float[${dim}] distance_metric=cosine)`,
@@ -232,10 +249,13 @@ export class HelpIndex {
     this.db.transaction(() => {
       this.db.prepare('DELETE FROM embeddings WHERE embedder = ?').run(embedder);
       const row = this.db.prepare('SELECT name FROM vec_tables WHERE embedder = ?').get(embedder) as
-        | { name: string }
+        | { name: unknown }
         | undefined;
       if (row) {
-        if (this.vectorBackend === 'sqlite-vec') this.db.exec(`DROP TABLE IF EXISTS ${row.name}`);
+        const name = checkedVecName(row.name);
+        if (name && this.vectorBackend === 'sqlite-vec') {
+          this.db.exec(`DROP TABLE IF EXISTS ${name}`);
+        }
         this.db.prepare('DELETE FROM vec_tables WHERE embedder = ?').run(embedder);
       }
     })();
@@ -290,11 +310,12 @@ export class HelpIndex {
     if (this.vectorBackend === 'sqlite-vec') {
       const row = this.db
         .prepare('SELECT name, dim FROM vec_tables WHERE embedder = ?')
-        .get(embedder) as { name: string; dim: number } | undefined;
-      if (!row || row.dim !== vector.length) return [];
+        .get(embedder) as { name: unknown; dim: number } | undefined;
+      const name = row ? checkedVecName(row.name) : null;
+      if (!row || !name || row.dim !== vector.length) return [];
       const rows = this.db
         .prepare(
-          `SELECT c.id FROM ${row.name} v JOIN chunks c ON c.rowid = v.rowid
+          `SELECT c.id FROM ${name} v JOIN chunks c ON c.rowid = v.rowid
            WHERE v.embedding MATCH ? AND k = ? ORDER BY v.distance`,
         )
         .all(toBlob(vector), limit) as Array<{ id: string }>;

@@ -75,6 +75,37 @@ public sealed class CloudMonitorResultsTests(PostgresFixture postgres) : IAsyncL
     }
 
     [Fact]
+    public async Task A_nodes_problem_text_that_reads_as_sql_is_stored_as_written()
+    {
+        // Samples go in through one raw INSERT over parameter arrays, and the problem text is the node's own words.
+        string[] problems = ["'); DROP TABLE \"CloudMonitorSamples\"; --", "' OR '1'='1", "back\\slash \"quoted\" 50%_off"];
+        var eu = await OnlineNodeAsync(_factory, "eu-1", "eu-central", Now);
+        var (user, client) = await AccountAsync(_factory);
+        await GrantAsync(_factory, user.Id, Go);
+        var scope = await PersonalScopeAsync(client);
+        var id = await CreatedAsync(client, Monitor(scope));
+        var other = await CreatedAsync(client, Monitor(scope, "t-web", name: "Web"));
+        await IngestAsync(_factory, eu, Result(other, "pass", Now));
+
+        await IngestAsync(
+            _factory,
+            eu,
+            Result(id, "fail", Now, problem: problems[0]),
+            Result(id, "fail", Now.AddSeconds(15), problem: problems[1]),
+            Result(id, "fail", Now.AddSeconds(30), problem: problems[2]),
+            Result(id, "pass'; DELETE FROM \"CloudMonitorSamples\"; --", Now.AddSeconds(45)));
+
+        var stored = await WithDbAsync(_factory, db => db.CloudMonitorSamples.AsNoTracking()
+            .Where(s => s.MonitorId == id).OrderBy(s => s.CheckedAt).Select(s => s.Problem).ToListAsync());
+        Assert.Equal(problems, stored);
+        Assert.Equal(1, await SampleCountAsync(other));
+        Assert.Equal(problems[1], Assert.Single(await IncidentsAsync(id)).Problem);
+        var status = await WithDbAsync(_factory, db => db.CloudMonitorStatuses.AsNoTracking().SingleAsync(s => s.MonitorId == id));
+        Assert.Equal(problems[2], status.Problem);
+        Assert.Equal("fail", status.State);
+    }
+
+    [Fact]
     public async Task Two_failures_on_one_node_and_one_on_another_open_one_incident_and_tell_each_member_once()
     {
         var eu = await OnlineNodeAsync(_factory, "eu-1", "eu-central", Now);

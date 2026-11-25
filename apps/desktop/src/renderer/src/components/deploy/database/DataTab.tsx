@@ -96,18 +96,19 @@ export function DataTab({
   const changes = useRowChanges(engine, objectRef, keyColumns, columnTypes);
   const editable = !readOnly && keyColumns.length > 0 && table.data?.kind === 'table';
   const pending = changes.count > 0;
-  const review = rows.data ? changes.statements(rows.data.result) : { sql: '', error: null };
+  const review = rows.data
+    ? changes.statements(rows.data.result)
+    : { sql: '', edits: [], error: null };
 
   async function apply() {
     setApplying(true);
     setProblem(null);
     try {
-      const outcome = await window.runova.database.query({
+      // The edits go to main as data; it writes the statements with every value bound.
+      const outcome = await window.runova.database.applyRowEdits({
         sessionId,
-        queryId: `edits-${Date.now().toString(36)}`,
-        text: review.sql,
-        database: objectRef.database ?? null,
-        confirmed: true,
+        ref: objectRef,
+        edits: review.edits,
       });
       if (outcome.status === 'failed') {
         setProblem(`Nothing was changed. ${outcome.error}`);

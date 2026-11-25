@@ -1,5 +1,11 @@
-import { buildRowEdits, type DbEngine, type RowEdit } from '@runova/core';
-import type { DbCell, DbObjectRef, DbResultSet, DbTableDescription } from '@shared/databaseTypes';
+import { buildRowEdits, type DbEngine } from '@runova/core';
+import type {
+  DbCell,
+  DbObjectRef,
+  DbResultSet,
+  DbRowEdit,
+  DbTableDescription,
+} from '@shared/databaseTypes';
 import { useMemo, useState } from 'react';
 import { Plus } from '@/components/icons';
 import { Button } from '@/components/ui/button';
@@ -27,8 +33,11 @@ export interface RowChanges {
   inserts: Record<string, DbCell>[];
   addInsert: (values: Record<string, DbCell>) => void;
   count: number;
-  /** The statements for everything pending, or the reason they cannot be written. */
-  statements: (result: DbResultSet) => { sql: string; error: string | null };
+  /**
+   * Everything pending: the edits main applies (writing its own statements, with every value a
+   * bound parameter), the same edits as SQL to review, or the reason they cannot be written.
+   */
+  statements: (result: DbResultSet) => { sql: string; edits: DbRowEdit[]; error: string | null };
   clear: () => void;
 }
 
@@ -65,11 +74,11 @@ export function useRowChanges(
 
   const statements = (result: DbResultSet) => {
     const index = new Map(result.columns.map((column, position) => [column.name, position]));
-    const keyOf = (row: number): Record<string, unknown> =>
+    const keyOf = (row: number): Record<string, DbCell> =>
       Object.fromEntries(
         keyColumns.map((name) => [name, result.rows[row]?.[index.get(name) ?? -1] ?? null]),
       );
-    const edits: RowEdit[] = [];
+    const edits: DbRowEdit[] = [];
     for (const [row, values] of cells) {
       if (!deleted.has(row)) edits.push({ kind: 'update', key: keyOf(row), values });
     }
@@ -80,9 +89,9 @@ export function useRowChanges(
       type: columnTypes.get(column.name) ?? column.type,
     }));
     try {
-      return { sql: buildRowEdits(engine, ref, columns, edits), error: null };
+      return { sql: buildRowEdits(engine, ref, columns, edits), edits, error: null };
     } catch (error) {
-      return { sql: '', error: error instanceof Error ? error.message : String(error) };
+      return { sql: '', edits: [], error: error instanceof Error ? error.message : String(error) };
     }
   };
 

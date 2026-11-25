@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { cassandraSslOptions } from './cassandra';
-import { mongoClientOptions } from './mongodb';
+import { mongoClientOptions, mongoUrl } from './mongodb';
 import { mssqlConfig, mssqlTlsOptions } from './mssql';
 import { mysqlSslOptions } from './mysql';
 import { clientConfig } from './postgres';
@@ -156,6 +156,25 @@ describe('mongodb', () => {
       tlsAllowInvalidCertificates: true,
     });
     expect(mongoClientOptions(direct({ engine: 'mongodb', tls: false }))).not.toHaveProperty('tls');
+  });
+
+  it('dials a URL whose host cannot add options or another address', () => {
+    expect(mongoUrl({ host: 'db.internal', port: 27017, srv: false })).toBe(
+      'mongodb://db.internal:27017/',
+    );
+    expect(mongoUrl({ host: 'c.mongodb.net', port: null, srv: true })).toBe(
+      'mongodb+srv://c.mongodb.net/',
+    );
+    expect(mongoUrl({ host: '::1', port: 27017, srv: false })).toBe('mongodb://[::1]:27017/');
+    const url = mongoUrl({
+      host: 'db.internal/?tlsInsecure=true&authSource=admin#',
+      port: 27017,
+      srv: false,
+    });
+    expect(url).toBe(
+      'mongodb://db.internal%2F%3FtlsInsecure%3Dtrue%26authSource%3Dadmin%23:27017/',
+    );
+    expect(url).not.toContain('?');
   });
 });
 

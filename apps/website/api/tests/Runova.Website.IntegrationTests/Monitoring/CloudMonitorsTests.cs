@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Time.Testing;
 using Runova.Monitoring.Contracts.Grpc;
 using Runova.Website.IntegrationTests.Infrastructure;
@@ -300,6 +301,28 @@ public sealed class CloudMonitorsTests(PostgresFixture postgres) : IAsyncLifetim
 
         Assert.Equal(HttpStatusCode.NoContent, (await client.SendAsync(HttpMethod.Delete, $"/api/v1/cloud-monitors/{id}/mutes/me")).StatusCode);
         Assert.False((await ReadAsync(client, id)).Body.GetProperty("muted").GetBoolean());
+    }
+
+    [Fact]
+    public async Task A_monitor_id_that_reads_as_sql_never_reaches_the_mute()
+    {
+        // The mute is raw SQL with the id as a parameter, and the id is a long the route checks first.
+        var (_, client) = await AccountAsync(_factory);
+        var (_, otherClient) = await AccountAsync(_factory, "Kim");
+        var mine = await CreatedAsync(client, Monitor(await PersonalScopeAsync(client)));
+        var theirs = await CreatedAsync(otherClient, Monitor(await PersonalScopeAsync(otherClient)));
+        Assert.Equal(HttpStatusCode.NoContent, (await client.SendAsync(HttpMethod.Put, $"/api/v1/cloud-monitors/{mine}/mutes/me")).StatusCode);
+
+        foreach (var id in new[] { $"{theirs} OR 1=1", $"{theirs}; DELETE FROM \"CloudMonitorMutes\"; --", $"{mine}' OR '1'='1" })
+        {
+            var path = $"/api/v1/cloud-monitors/{Uri.EscapeDataString(id)}/mutes/me";
+            Assert.Equal(HttpStatusCode.NotFound, (await client.SendAsync(HttpMethod.Put, path)).StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, (await client.SendAsync(HttpMethod.Delete, path)).StatusCode);
+        }
+
+        var mutes = await WithDbAsync(_factory, db => db.CloudMonitorMutes.AsNoTracking().Select(m => m.MonitorId).ToListAsync());
+        Assert.Equal([mine], mutes);
+        Assert.False((await ReadAsync(otherClient, theirs)).Body.GetProperty("muted").GetBoolean());
     }
 
     [Fact]

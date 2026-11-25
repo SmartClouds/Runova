@@ -6,15 +6,17 @@ import { mysqlHealth, mysqlSchemaGraph } from './mysqlInsights';
 type Rows = Record<string, unknown>[];
 
 function fakeConnection(answers: [RegExp, Rows | Error][]) {
-  const query = vi.fn(async (sql: string, _params?: unknown[]) => {
-    for (const [pattern, answer] of answers) {
+  const answer = async (sql: string) => {
+    for (const [pattern, rows] of answers) {
       if (!pattern.test(sql)) continue;
-      if (answer instanceof Error) throw answer;
-      return [answer, []] as [Rows, unknown[]];
+      if (rows instanceof Error) throw rows;
+      return [rows, []] as [Rows, unknown[]];
     }
     throw new Error(`unexpected query: ${sql.slice(0, 80)}`);
-  });
-  return { query };
+  };
+  const query = vi.fn(async (sql: string) => answer(sql));
+  const execute = vi.fn(async (sql: string, _params: string[]) => answer(sql));
+  return { query, execute };
 }
 
 describe('mysqlSchemaGraph', () => {
@@ -61,7 +63,8 @@ describe('mysqlSchemaGraph', () => {
       ],
     ]);
     const graph = await mysqlSchemaGraph(connection, 'shop');
-    for (const call of connection.query.mock.calls) expect(call[1]).toEqual(['shop']);
+    expect(connection.query).not.toHaveBeenCalled();
+    for (const call of connection.execute.mock.calls) expect(call[1]).toEqual(['shop']);
     expect(graph.tables).toEqual([
       {
         ref: { database: 'shop', name: 'lines' },
@@ -176,5 +179,18 @@ describe('mysqlHealth', () => {
     );
     expect(report.indexes[1]).toMatchObject({ sizeBytes: null, pageCount: null });
     expect(report.notes.join(' ')).toMatch(/index sizes/i);
+  });
+
+  it('binds a database name that tries to end its string as a parameter, never as text', async () => {
+    const hostile = "shop' OR '1'='1'; DROP TABLE orders; -- \\'";
+    const connection = fakeConnection([[/./, []]]);
+    await mysqlHealth(connection, hostile, 'mysql');
+    await mysqlSchemaGraph(connection, hostile);
+    expect(connection.execute.mock.calls.length).toBeGreaterThan(0);
+    for (const [sql, params] of connection.execute.mock.calls) {
+      expect(params).toEqual([hostile]);
+      expect(sql).not.toContain('shop');
+    }
+    for (const [sql] of connection.query.mock.calls) expect(sql).not.toContain('shop');
   });
 });

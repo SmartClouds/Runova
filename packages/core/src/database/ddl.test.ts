@@ -3,6 +3,7 @@ import {
   buildAlterTable,
   buildCreateTable,
   buildDropTable,
+  buildRowEditStatements,
   buildRowEdits,
   columnTypeSuggestions,
   sqlLiteral,
@@ -350,6 +351,143 @@ describe('buildRowEdits', () => {
       ]),
     ).toThrow(/key/i);
     expect(buildRowEdits('postgres', { name: 't' }, columns, [])).toBe('');
+  });
+
+  it('writes a value that tries to end its string as part of the string in the preview', () => {
+    const sql = buildRowEdits('postgres', { name: 't' }, columns, [
+      { kind: 'update', key: { id: 1 }, values: { name: "\\'; DROP TABLE t; --" } },
+    ]);
+    expect(sql).toContain(`SET "name" = E'\\\\''; DROP TABLE t; --' WHERE`);
+  });
+});
+
+describe('buildRowEditStatements', () => {
+  const columns = [
+    { name: 'id', type: 'integer' },
+    { name: 'name', type: 'text' },
+    { name: 'paid', type: 'boolean' },
+  ];
+  const HOSTILE = [
+    "x'; DROP TABLE t; --",
+    "' OR '1'='1",
+    "\\'; DROP TABLE t; --",
+    '100%_done',
+    '$1',
+    '@p1',
+    '?',
+  ];
+
+  it('binds every value as a parameter and never writes one into the text', () => {
+    for (const value of HOSTILE) {
+      const [update, insert, remove] = buildRowEditStatements(
+        'postgres',
+        { schema: 'public', name: 't' },
+        columns,
+        [
+          { kind: 'update', key: { id: value }, values: { name: value } },
+          { kind: 'insert', values: { id: value, name: value } },
+          { kind: 'delete', key: { id: value } },
+        ],
+      );
+      expect(update).toEqual({
+        text: 'UPDATE "public"."t" SET "name" = $1 WHERE "id" = $2',
+        params: [value, value],
+      });
+      expect(insert).toEqual({
+        text: 'INSERT INTO "public"."t" ("id", "name") VALUES ($1, $2)',
+        params: [value, value],
+      });
+      expect(remove).toEqual({ text: 'DELETE FROM "public"."t" WHERE "id" = $1', params: [value] });
+    }
+  });
+
+  it('uses each engine own placeholders and quotes', () => {
+    const edit = [{ kind: 'update' as const, key: { id: 1 }, values: { name: 'Ada' } }];
+    expect(buildRowEditStatements('mysql', { database: 'd', name: 't' }, columns, edit)).toEqual([
+      { text: 'UPDATE `d`.`t` SET `name` = ? WHERE `id` = ?', params: ['Ada', 1] },
+    ]);
+    expect(buildRowEditStatements('sqlite', { name: 't' }, columns, edit)).toEqual([
+      { text: 'UPDATE "t" SET "name" = ? WHERE "id" = ?', params: ['Ada', 1] },
+    ]);
+    expect(
+      buildRowEditStatements('mssql', { database: 'd', schema: 'dbo', name: 't' }, columns, edit),
+    ).toEqual([
+      { text: 'UPDATE [d].[dbo].[t] SET [name] = @p1 WHERE [id] = @p2', params: ['Ada', 1] },
+    ]);
+  });
+
+  it('quotes table and column names that try to break out of their quotes', () => {
+    const name = 'x"; DROP TABLE y; --';
+    const [statement] = buildRowEditStatements(
+      'sqlite',
+      { name },
+      [{ name, type: 'text' }],
+      [{ kind: 'insert', values: { [name]: 'v' } }],
+    );
+    expect(statement?.text).toBe(
+      'INSERT INTO "x""; DROP TABLE y; --" ("x""; DROP TABLE y; --") VALUES (?)',
+    );
+    const [mysql] = buildRowEditStatements(
+      'mysql',
+      { database: 'd', name: 'a`b' },
+      [],
+      [{ kind: 'delete', key: { 'c`d': 1 } }],
+    );
+    expect(mysql?.text).toBe('DELETE FROM `d`.`a``b` WHERE `c``d` = ?');
+    const [mssql] = buildRowEditStatements(
+      'mssql',
+      { schema: 'dbo', name: 'a]b' },
+      [],
+      [{ kind: 'delete', key: { 'c]d': 1 } }],
+    );
+    expect(mssql?.text).toBe('DELETE FROM [dbo].[a]]b] WHERE [c]]d] = @p1');
+  });
+
+  it('writes NULL as the keyword, matches a NULL key with IS NULL, and binds booleans', () => {
+    expect(
+      buildRowEditStatements('postgres', { name: 't' }, columns, [
+        { kind: 'update', key: { id: 1, name: null }, values: { name: null, paid: 't' } },
+      ]),
+    ).toEqual([
+      {
+        text: 'UPDATE "t" SET "name" = NULL, "paid" = $1 WHERE "id" = $2 AND "name" IS NULL',
+        params: [true, 1],
+      },
+    ]);
+  });
+
+  it('binds an object cell as its JSON text', () => {
+    expect(
+      buildRowEditStatements('postgres', { name: 't' }, columns, [
+        { kind: 'insert', values: { name: { a: "'" } } },
+      ])[0]?.params,
+    ).toEqual(['{"a":"\'"}']);
+  });
+
+  it('inserts a row of defaults the way each engine writes it', () => {
+    const edit = [{ kind: 'insert' as const, values: {} }];
+    expect(buildRowEditStatements('sqlite', { name: 't' }, columns, edit)[0]?.text).toBe(
+      'INSERT INTO "t" DEFAULT VALUES',
+    );
+    expect(buildRowEditStatements('mysql', { name: 't' }, columns, edit)[0]?.text).toBe(
+      'INSERT INTO `t` () VALUES ()',
+    );
+  });
+
+  it('turns down an edit with no key or nothing to set, and engines without parameters', () => {
+    expect(() =>
+      buildRowEditStatements('postgres', { name: 't' }, columns, [{ kind: 'delete', key: {} }]),
+    ).toThrow(/key/);
+    expect(() =>
+      buildRowEditStatements('postgres', { name: 't' }, columns, [
+        { kind: 'update', key: { id: 1 }, values: {} },
+      ]),
+    ).toThrow(/value/);
+    expect(() =>
+      buildRowEditStatements('cassandra', { name: 't' }, columns, [
+        { kind: 'delete', key: { id: 1 } },
+      ]),
+    ).toThrow(/parameters/);
   });
 });
 

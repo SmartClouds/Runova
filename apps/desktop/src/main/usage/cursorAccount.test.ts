@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { tempDir, withPlatform } from '../../test/main/fixtures';
+import { ALWAYS_TRUE, dropTable } from '../../test/main/hostileSqlInput';
 
 /**
  * Cursor keeps its session in the VS Code `globalStorage` SQLite database rather than a JSON file,
@@ -288,6 +289,31 @@ describe('nothing to read', () => {
 });
 
 describe('the read itself', () => {
+  it('reads hostile values as text and ignores keys that only look like the wanted ones', async () => {
+    // The lookup keys are constants and bound as parameters. Another program writes this file,
+    // so what it holds, keys included, can be anything.
+    const email = `${dropTable('ItemTable')}@example.com`;
+    const path = writeState({
+      'cursorAuth/accessToken': `"${validToken()}"`,
+      'cursorAuth/cachedEmail': `"${email}"`,
+      [`cursorAuth/stripeMembershipType${ALWAYS_TRUE}`]: '"pro_plus"',
+      [ALWAYS_TRUE]: '"ultra"',
+      'cursorAuth/stripeMembershipTyp_': '"ultra"',
+    });
+    const { readCursorAccount } = await loadModule();
+
+    const account = readCursorAccount();
+
+    expect(account.email).toBe(email);
+    expect(account.plan).toBeNull();
+    const db = new DatabaseSync(path);
+    try {
+      expect(db.prepare('SELECT COUNT(*) AS n FROM ItemTable').get()).toEqual({ n: 5 });
+    } finally {
+      db.close();
+    }
+  });
+
   it('leaves the state file untouched', async () => {
     const path = writeState({ 'cursorAuth/accessToken': `"${validToken()}"` });
     const before = readFileSync(path);

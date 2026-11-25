@@ -307,7 +307,12 @@ export async function openPostgres(options: DriverConnectOptions): Promise<DbDri
     async readRows(input: Omit<DbReadRowsInput, 'sessionId'>): Promise<DbRowsPage> {
       const client = await clientFor(input.ref.database);
       const table = await describeTable(input.ref);
-      const sql = buildReadRows('postgres', input.ref, input);
+      const sql = buildReadRows(
+        'postgres',
+        input.ref,
+        input,
+        table.columns.map((column) => column.name),
+      );
       const started = Date.now();
       await client.query('BEGIN READ ONLY');
       try {
@@ -364,6 +369,22 @@ export async function openPostgres(options: DriverConnectOptions): Promise<DbDri
         if (options.readOnly) {
           await client.query('SET default_transaction_read_only = off').catch(() => undefined);
         }
+      }
+    },
+
+    async applyEdits(statements, database) {
+      const client = await clientFor(database);
+      await client.query('BEGIN');
+      try {
+        let affectedRows = 0;
+        for (const statement of statements) {
+          affectedRows += (await client.query(statement.text, [...statement.params])).rowCount ?? 0;
+        }
+        await client.query('COMMIT');
+        return { affectedRows };
+      } catch (error) {
+        await client.query('ROLLBACK').catch(() => undefined);
+        throw new DriverError(describeError(error));
       }
     },
 

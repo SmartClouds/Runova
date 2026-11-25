@@ -7,7 +7,7 @@ import { DriverError } from './types';
 type Rows = Record<string, unknown>[];
 
 function fakeRows(answers: [RegExp, Rows | Error][]) {
-  return vi.fn(async (text: string): Promise<Rows> => {
+  return vi.fn(async (text: string, _params?: Readonly<Record<string, string>>): Promise<Rows> => {
     for (const [pattern, answer] of answers) {
       if (!pattern.test(text)) continue;
       if (answer instanceof Error) throw answer;
@@ -88,9 +88,10 @@ describe('mssqlSchemaGraph', () => {
       [/sys\.tables/, [{ schema: 'sales', name: 'Orders', rows: 42 }]],
     ]);
     const graph = await mssqlSchemaGraph(rows, 'Shop', 'sales');
-    for (const [text] of rows.mock.calls) {
+    for (const [text, params] of rows.mock.calls) {
       expect(text.startsWith('USE [Shop];')).toBe(true);
-      expect(text).toContain("s.name = N'sales'");
+      expect(text).toContain('s.name = @schema');
+      expect(params).toEqual({ schema: 'sales' });
     }
     expect(graph.tables).toEqual([
       {
@@ -122,7 +123,24 @@ describe('mssqlSchemaGraph', () => {
   it('reads every schema when none is named', async () => {
     const rows = fakeRows([[/./, []]]);
     await mssqlSchemaGraph(rows, 'Shop', null);
-    for (const [text] of rows.mock.calls) expect(text).not.toContain("s.name = N'");
+    for (const [text, params] of rows.mock.calls) {
+      expect(text).not.toContain('@schema');
+      expect(params).toEqual({});
+    }
+  });
+
+  it('binds a hostile schema and keeps a hostile database a bracketed name', async () => {
+    const schema = "dbo' OR '1'='1'; DROP TABLE Orders; --";
+    const rows = fakeRows([[/./, []]]);
+    await mssqlSchemaGraph(rows, 'Shop]; DROP DATABASE Shop; --', schema);
+    await mssqlHealth(rows, 'Shop]; DROP DATABASE Shop; --', schema, 'thorough');
+    for (const [text, params] of rows.mock.calls) {
+      expect(text).not.toContain("'1'='1'");
+      if (text.startsWith('USE')) {
+        expect(text.startsWith('USE [Shop]]; DROP DATABASE Shop; --];')).toBe(true);
+      }
+      if (text.includes('@schema')) expect(params).toEqual({ schema });
+    }
   });
 });
 
@@ -252,7 +270,7 @@ describe('mssqlHealth', () => {
     const report = await mssqlHealth(rows, 'Shop', 'dbo', 'thorough');
     const scan = rows.mock.calls.find(([text]) => /dm_db_index_physical_stats/.test(text))?.[0];
     expect(scan).toContain("'SAMPLED'");
-    expect(scan).toContain("s.name = N'dbo'");
+    expect(scan).toContain('s.name = @schema');
     expect(report.method).toMatch(/SAMPLED/);
   });
 

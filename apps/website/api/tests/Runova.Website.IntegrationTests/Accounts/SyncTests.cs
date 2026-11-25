@@ -126,6 +126,32 @@ public sealed class SyncTests(PostgresFixture postgres) : IDisposable
         Assert.Equal(HttpStatusCode.NotFound, write.StatusCode);
     }
 
+    [Fact]
+    public async Task A_scope_id_that_reads_as_sql_reaches_no_scope()
+    {
+        // A push locks its scope with raw SQL, the id a parameter, and the route takes only a long.
+        var owner = await TestAccounts.CreateAsync(_factory.Services);
+        var stranger = await TestAccounts.CreateAsync(_factory.Services);
+        var ownerClient = await TestAccounts.SignedInClientAsync(_factory, owner);
+        var strangerClient = await TestAccounts.SignedInClientAsync(_factory, stranger);
+        var scope = await PersonalScopeAsync(ownerClient);
+        var own = await PersonalScopeAsync(strangerClient);
+        await PushAsync(ownerClient, scope, Record("a", 0));
+
+        foreach (var id in new[] { $"{scope} OR 1=1", $"{own}; UPDATE \"SyncScopes\" SET \"LatestRevision\" = 0; --", $"{own}' OR '1'='1" })
+        {
+            var write = await strangerClient.SendAsync(
+                HttpMethod.Post, $"/api/v1/sync-scopes/{Uri.EscapeDataString(id)}/records", new { records = new[] { Record("x", 0) } });
+            Assert.Equal(HttpStatusCode.NotFound, write.StatusCode);
+        }
+
+        var changes = await ChangesAsync(ownerClient, scope);
+        Assert.Equal(["a"], changes.GetProperty("records").EnumerateArray().Select(r => r.GetProperty("itemId").GetString()));
+        Assert.Empty((await ChangesAsync(strangerClient, own)).GetProperty("records").EnumerateArray());
+        var scopes = await ApiClient.ReadJsonAsync(await ownerClient.GetAsync("/api/v1/sync-scopes"), HttpStatusCode.OK);
+        Assert.Equal(1, scopes.GetProperty("items")[0].GetProperty("latestRevision").GetInt64());
+    }
+
     [Theory]
     [InlineData("Projects", "a")]
     [InlineData("projects", "")]

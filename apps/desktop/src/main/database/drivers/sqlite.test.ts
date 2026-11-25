@@ -1,7 +1,7 @@
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildRowEdits } from '@runova/core';
+import { buildRowEditStatements, buildRowEdits } from '@runova/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { openDriver } from './index';
 import type { DbDriver } from './types';
@@ -189,5 +189,153 @@ describe('SQLite driver', () => {
         srv: false,
       }),
     ).rejects.toThrow(/no file/);
+  });
+});
+
+/**
+ * Names, sorts, pages and edited values the app writes into its own SQL, sent through the driver
+ * with the characters that would change a query if they were pasted in. Each has to come out as
+ * plain data or a plain name: stored and read back as it was, matching only the rows that hold
+ * it, and leaving every other row and table alone.
+ */
+describe('SQLite driver with hostile input', () => {
+  const DROP = "'; DROP TABLE items; --";
+  const ALWAYS = "' OR '1'='1";
+  const NAME = 'x"; DROP TABLE items; --';
+  const COLUMN = 'c`]"\'; DROP TABLE items; --';
+
+  const itemNames = async () =>
+    (await run('SELECT name FROM items ORDER BY id')).results[0]?.rows.map((row) => row[0]);
+
+  it('browses a table whose name and column try to close their quotes', async () => {
+    expect(
+      (
+        await run(
+          `CREATE TABLE "x""; DROP TABLE items; --" (id INTEGER PRIMARY KEY, "c\`]""'; DROP TABLE items; --" TEXT);
+           INSERT INTO "x""; DROP TABLE items; --" VALUES (1, 'one'), (2, 'two');`,
+        )
+      ).error,
+    ).toBeUndefined();
+    const nodes = await driver.listObjects(null, null);
+    expect(nodes.map((node) => node.name)).toContain(NAME);
+    const table = await driver.describe({ name: NAME });
+    expect(table.columns.map((column) => column.name)).toEqual(['id', COLUMN]);
+    const page = await driver.readRows({
+      ref: { name: NAME },
+      limit: 10,
+      offset: 0,
+      orderBy: { column: COLUMN, direction: 'desc' },
+    });
+    expect(page.result.rows).toEqual([
+      [2, 'two'],
+      [1, 'one'],
+    ]);
+    expect(page.total).toBe(2);
+    expect(await itemNames()).toEqual(['apple', 'pear', 'plum']);
+    const graph = await driver.schemaGraph?.({ database: null, schema: null });
+    expect(graph?.tables.map((one) => one.ref.name)).toContain(NAME);
+    expect(
+      (await driver.health?.({ database: null, schema: null, scan: 'fast' }))?.tables,
+    ).toHaveLength(2);
+  });
+
+  it('says a table that is only a hostile name is not there, and drops nothing', async () => {
+    await expect(driver.describe({ name: `items${DROP}` })).rejects.toThrow(/no table/);
+    await expect(
+      driver.readRows({ ref: { name: `items"; DROP TABLE items; --` }, limit: 5, offset: 0 }),
+    ).rejects.toThrow(/no table/);
+    expect(await itemNames()).toEqual(['apple', 'pear', 'plum']);
+  });
+
+  it('sorts only ASC or DESC by a column the table has', async () => {
+    const page = await driver.readRows({
+      ref: { name: 'items' },
+      limit: 5,
+      offset: 0,
+      orderBy: { column: 'price', direction: 'ASC; DROP TABLE items' as 'asc' },
+    });
+    expect(page.result.rows.map((row) => row[1])).toEqual(['apple', 'pear', 'plum']);
+    await expect(
+      driver.readRows({
+        ref: { name: 'items' },
+        limit: 5,
+        offset: 0,
+        orderBy: { column: 'price DESC; DROP TABLE items; --', direction: 'asc' },
+      }),
+    ).rejects.toThrow(/no column/);
+    expect(await itemNames()).toEqual(['apple', 'pear', 'plum']);
+  });
+
+  it('turns down a page size or offset that is not a whole number', async () => {
+    for (const bad of ['1; DROP TABLE items', 1.5, -1, Number.NaN] as unknown[]) {
+      await expect(
+        driver.readRows({ ref: { name: 'items' }, limit: bad as number, offset: 0 }),
+      ).rejects.toThrow(/whole number/);
+      await expect(
+        driver.readRows({ ref: { name: 'items' }, limit: 5, offset: bad as number }),
+      ).rejects.toThrow(/whole number/);
+    }
+    expect(await itemNames()).toEqual(['apple', 'pear', 'plum']);
+  });
+
+  it('keeps a typed filter inside its WHERE, and reads LIKE % and _ as the user escaped them', async () => {
+    await expect(
+      driver.readRows({
+        ref: { name: 'items' },
+        limit: 5,
+        offset: 0,
+        filter: '1=1); DROP TABLE items; --',
+      }),
+    ).rejects.toThrow(/one condition/);
+    await expect(
+      driver.readRows({
+        ref: { name: 'items' },
+        limit: 5,
+        offset: 0,
+        filter: '1=1) UNION SELECT 1, sql, 0 FROM sqlite_master --',
+      }),
+    ).rejects.toThrow(/one condition/);
+    expect(await itemNames()).toEqual(['apple', 'pear', 'plum']);
+
+    await run("INSERT INTO items (name) VALUES ('100%_done'), ('100xxdone')");
+    const page = await driver.readRows({
+      ref: { name: 'items' },
+      limit: 5,
+      offset: 0,
+      filter: "name LIKE '100\\%\\_%' ESCAPE '\\'",
+    });
+    expect(page.result.rows.map((row) => row[1])).toEqual(['100%_done']);
+  });
+
+  it('applies edits with every value bound, matching only the rows they name', async () => {
+    const columns = (await driver.describe({ name: 'items' })).columns;
+    const statements = buildRowEditStatements('sqlite', { name: 'items' }, columns, [
+      { kind: 'insert', values: { name: DROP } },
+      { kind: 'insert', values: { name: ALWAYS, price: '1; DROP TABLE items' } },
+      { kind: 'update', key: { id: 2 }, values: { name: `pear${DROP}` } },
+      // A key that would match every row if it were pasted into the WHERE matches none.
+      { kind: 'update', key: { id: ALWAYS }, values: { name: 'everyone' } },
+      { kind: 'delete', key: { id: `3 OR 1=1` } },
+      { kind: 'delete', key: { id: DROP } },
+    ]);
+    const outcome = await driver.applyEdits?.(statements, null);
+    expect(outcome).toEqual({ affectedRows: 3 });
+    expect((await run('SELECT id, name, price FROM items ORDER BY id')).results[0]?.rows).toEqual([
+      [1, 'apple', 1.5],
+      [2, `pear${DROP}`, 2],
+      [3, 'plum', 3.25],
+      [4, DROP, 0],
+      [5, ALWAYS, '1; DROP TABLE items'],
+    ]);
+  });
+
+  it('rolls every edit back when one of them fails', async () => {
+    const columns = (await driver.describe({ name: 'items' })).columns;
+    const statements = buildRowEditStatements('sqlite', { name: 'items' }, columns, [
+      { kind: 'update', key: { id: 1 }, values: { name: DROP } },
+      { kind: 'insert', values: { name: null } },
+    ]);
+    await expect(driver.applyEdits?.(statements, null)).rejects.toThrow(/NOT NULL/);
+    expect(await itemNames()).toEqual(['apple', 'pear', 'plum']);
   });
 });

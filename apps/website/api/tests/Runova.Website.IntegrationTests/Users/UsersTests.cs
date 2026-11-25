@@ -166,6 +166,29 @@ public sealed class UsersTests : IDisposable
     }
 
     [Fact]
+    public async Task q_is_matched_as_literal_text_even_when_it_reads_as_sql_or_a_like_pattern()
+    {
+        var admin = await AdminClientAsync();
+        var marker = NewMarker();
+        var percent = await TestUsers.CreateAsync(_factory.Services, displayName: $"{marker} 100%_sure");
+        var letters = await TestUsers.CreateAsync(_factory.Services, displayName: $"{marker} 100xxsure");
+        var slash = await TestUsers.CreateAsync(_factory.Services, displayName: $"{marker} back\\slash");
+        var sql = await TestUsers.CreateAsync(_factory.Services, displayName: $"{marker}'; DROP TABLE \"AspNetUsers\"; --");
+
+        Assert.Equal([percent.Id], await IdsAsync(admin, Search($"{marker} 100%")));
+        Assert.Equal([percent.Id], await IdsAsync(admin, Search($"{marker} 100%_sure")));
+        Assert.Empty(await IdsAsync(admin, Search($"{marker} 100_")));
+        Assert.Equal([slash.Id], await IdsAsync(admin, Search($"{marker} back\\")));
+        Assert.Equal([sql.Id], await IdsAsync(admin, Search($"{marker}'; DROP TABLE \"AspNetUsers\"; --")));
+        Assert.Empty(await IdsAsync(admin, Search("' OR '1'='1")));
+        Assert.Equal([percent.Id, letters.Id, slash.Id, sql.Id], await IdsAsync(admin, Search(marker)));
+        var read = await ApiClient.ReadJsonAsync(await admin.GetAsync($"{Users}/{sql.Id}"), HttpStatusCode.OK);
+        Assert.Equal($"{marker}'; DROP TABLE \"AspNetUsers\"; --", read.GetProperty("displayName").GetString());
+
+        static string Search(string q) => $"{Users}?q={Uri.EscapeDataString(q)}";
+    }
+
+    [Fact]
     public async Task role_and_disabled_filter_the_list()
     {
         var admin = await AdminClientAsync();

@@ -4,6 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 import type { BlueprintRevision } from '@runova/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AddBlueprintRevisionInput } from '../shared/apiTypes';
+import { ALWAYS_TRUE, hostileSqlValues } from '../test/main/hostileSqlInput';
 import { useTempUserData } from '../test/main/ipcHarness';
 
 /**
@@ -311,5 +312,64 @@ describe('backup export and import', () => {
 
     // The column is NOT NULL, so a missing list has to become empty JSON rather than a crash.
     expect(db.exportAll()[0].attachmentNames).toEqual([]);
+  });
+});
+
+describe('hostile input is data, never SQL', () => {
+  const hostile = hostileSqlValues('blueprint_revisions');
+  type StepId = NonNullable<BlueprintRevision['stepId']>;
+
+  it('stores hostile text verbatim and lists each revision only under its own project and step', async () => {
+    const db = await loadDb();
+    const bystander = db.add(input({ projectId: 'plain', text: 'bystander' }));
+    const added = hostile.map((text) =>
+      db.add(
+        input({
+          blueprintId: text,
+          projectId: text,
+          stepId: text as StepId,
+          text,
+          attachmentNames: [text],
+        }),
+      ),
+    );
+
+    for (const [index, text] of hostile.entries()) {
+      expect(db.list(text, text as StepId)).toEqual([added[index]]);
+      expect(db.list(text, 'idea')).toEqual([]);
+    }
+    expect(db.list('plain', ALWAYS_TRUE as StepId)).toEqual([]);
+    expect(db.list('plain', 'idea')).toEqual([bystander]);
+    expect(db.exportAll()).toHaveLength(hostile.length + 1);
+  });
+
+  it('prunes and removes only the history its hostile ids name', async () => {
+    const db = await loadDb();
+    const kept = db.add(input({ projectId: 'plain' }));
+    db.add(input({ blueprintId: ALWAYS_TRUE, projectId: ALWAYS_TRUE }));
+
+    for (const text of hostile.filter((one) => one !== ALWAYS_TRUE)) db.removeForProject(text);
+    expect(db.exportAll()).toHaveLength(2);
+
+    db.removeForProject(ALWAYS_TRUE);
+    expect(db.exportAll()).toEqual([kept]);
+  });
+
+  it('restores a backup full of hostile text without running any of it', async () => {
+    const db = await loadDb();
+    const entries: BlueprintRevision[] = hostile.map((text, index) => ({
+      id: text,
+      blueprintId: text,
+      projectId: text,
+      target: 'section',
+      stepId: text as StepId,
+      text,
+      attachmentNames: [text],
+      createdAt: `2026-02-02T00:00:0${index}.000Z`,
+    }));
+
+    db.importAll(entries);
+
+    expect(db.exportAll()).toEqual([...entries].reverse());
   });
 });

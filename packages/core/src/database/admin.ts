@@ -315,8 +315,15 @@ export function changePasswordStatement(engine: DbEngine, ref: UserRef, password
 /** A statement with every copy of a secret (and its quoted form) replaced by stars, for a preview. */
 export function maskSecret(text: string, secret: string): string {
   if (!secret) return text;
+  const quoted = secret.replaceAll("'", "''");
   const forms = [
-    ...new Set([secret, secret.replaceAll("'", "''"), JSON.stringify(secret).slice(1, -1)]),
+    ...new Set([
+      secret,
+      quoted,
+      // MySQL's literals, and PostgreSQL's E'...' ones, double the backslashes too.
+      quoted.replaceAll('\\', '\\\\'),
+      JSON.stringify(secret).slice(1, -1),
+    ]),
   ];
   let out = text;
   for (const form of forms.sort((a, b) => b.length - a.length))

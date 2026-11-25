@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatConnectionUrl, parseConnectionUrl } from './connectionUrl.js';
+import { formatConnectionUrl, parseConnectionUrl, urlHost } from './connectionUrl.js';
 
 /** Adding a database by hand is one pasted URL, so every common URL form has to read right. */
 
@@ -210,5 +210,42 @@ describe('formatConnectionUrl', () => {
         { withPassword: true },
       ),
     ).toBe('mongodb://root:pw@mongo:27017?authSource=admin');
+  });
+
+  it('keeps a host that holds URL characters a host, so it cannot add options or an address', () => {
+    const url = formatConnectionUrl({
+      engine: 'mongodb',
+      host: 'db.internal/?tlsInsecure=true&authSource=evil#',
+      port: 27017,
+      user: 'root',
+      tls: false,
+    });
+    expect(url).toBe(
+      'mongodb://root@db.internal%2F%3FtlsInsecure%3Dtrue%26authSource%3Devil%23:27017',
+    );
+    expect(
+      formatConnectionUrl({ engine: 'postgres', host: 'evil.com@real.db', port: 5432, tls: false }),
+    ).toBe('postgres://evil.com%40real.db:5432');
+  });
+
+  it('writes an IPv6 host in brackets, and reads it back', () => {
+    const connection = { engine: 'postgres' as const, host: '::1', port: 5432, tls: false };
+    const url = formatConnectionUrl(connection);
+    expect(url).toBe('postgres://[::1]:5432');
+    expect(parseConnectionUrl(url)).toEqual(connection);
+  });
+});
+
+describe('urlHost', () => {
+  it('leaves a host name or IPv4 address alone and brackets IPv6', () => {
+    expect(urlHost('db.example.com')).toBe('db.example.com');
+    expect(urlHost('my_service-1')).toBe('my_service-1');
+    expect(urlHost('10.0.0.5')).toBe('10.0.0.5');
+    expect(urlHost('fe80::1%eth0')).toBe('[fe80::1%25eth0]');
+    expect(urlHost('[::1]')).toBe('[::1]');
+  });
+
+  it('encodes what would end the host', () => {
+    expect(urlHost('a:1/b?c#d@e')).toBe('a%3A1%2Fb%3Fc%23d%40e');
   });
 });

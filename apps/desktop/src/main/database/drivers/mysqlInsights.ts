@@ -14,13 +14,15 @@ import type { DriverSchemaGraph } from './types';
  */
 
 export interface MysqlQueryable {
-  query(sql: string, params?: unknown[]): Promise<[unknown, unknown]>;
+  query(sql: string): Promise<[unknown, unknown]>;
+  /** A prepared statement the server binds the values into (see mysql.ts). */
+  execute(sql: string, params: string[]): Promise<[unknown, unknown]>;
 }
 
 type Row = Record<string, unknown>;
 
-async function rows(connection: MysqlQueryable, sql: string, params?: unknown[]): Promise<Row[]> {
-  const [result] = await connection.query(sql, params);
+async function rows(connection: MysqlQueryable, sql: string, params?: string[]): Promise<Row[]> {
+  const [result] = params ? await connection.execute(sql, params) : await connection.query(sql);
   return result as Row[];
 }
 

@@ -1,4 +1,4 @@
-import type { DbEngine, DbTlsMode } from '@runova/core';
+import type { BoundStatement, DbEngine, DbTlsMode } from '@runova/core';
 import type {
   DbHealthReport,
   DbObjectKind,
@@ -76,6 +76,15 @@ export interface DbDriver {
   schemaGraph?(where: DriverScope): Promise<DriverSchemaGraph>;
   /** Index fragmentation and free space. Left out where the engine has no such numbers. */
   health?(where: DriverScope & { scan: 'fast' | 'thorough' }): Promise<DbHealthReport>;
+  /**
+   * Runs the grid's edits in one transaction, each value bound as a parameter, so they all land
+   * or none do. `database` picks the connection on engines that have one per database. Left out
+   * where the engine has no parameters for them (Cassandra).
+   */
+  applyEdits?(
+    statements: readonly BoundStatement[],
+    database: string | null,
+  ): Promise<{ affectedRows: number }>;
   close(): Promise<void>;
 }
 

@@ -2,6 +2,9 @@ import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import type { Duplex } from 'node:stream';
 import {
+  buildRowEditStatements,
+  buildRowEdits,
+  canBindRowEdits,
   classifyStatement,
   type DbEngine,
   type DetectedDatabase,
@@ -13,6 +16,7 @@ import {
   formatConnectionUrl,
   MAX_ENV_FILE_BYTES,
   parseDotenv,
+  type RowEdit,
   type SchemaTable,
 } from '@runova/core';
 import type {
@@ -39,6 +43,9 @@ import type {
   DbQueryInput,
   DbQueryOutcome,
   DbReadRowsInput,
+  DbRowEdit,
+  DbRowEditsInput,
+  DbRowEditsOutcome,
   DbRowsPage,
   DbSchemaGraph,
   DbSetting,
@@ -107,6 +114,36 @@ interface Session {
   cleanup: (() => Promise<void>)[];
   running: Map<string, AbortController>;
   lastUsed: number;
+}
+
+/**
+ * Every name in the edits has to be a column of the table, and every update and delete has to
+ * pick its row by exactly the table's primary key, so an edit can never reach more rows than the
+ * one the user changed.
+ */
+function checkRowEdits(table: DbTableDescription, edits: readonly DbRowEdit[]): void {
+  const columns = new Set(table.columns.map((column) => column.name));
+  const keys = table.columns.filter((column) => column.primaryKey).map((column) => column.name);
+  for (const edit of edits) {
+    const names = [
+      ...(edit.kind === 'delete' ? [] : Object.keys(edit.values)),
+      ...(edit.kind === 'insert' ? [] : Object.keys(edit.key)),
+    ];
+    for (const name of names) {
+      if (!columns.has(name)) throw new Error(`${table.ref.name} has no column ${name}.`);
+    }
+    if (edit.kind === 'insert') continue;
+    const named = Object.keys(edit.key);
+    if (
+      keys.length === 0 ||
+      named.length !== keys.length ||
+      !keys.every((key) => named.includes(key))
+    ) {
+      throw new Error(
+        `A change to ${table.ref.name} has to pick its row by the primary key (${keys.join(', ') || 'it has none'}).`,
+      );
+    }
+  }
 }
 
 function sourceKey(serverId: string | null, containerName: string): string {
@@ -817,6 +854,50 @@ export class DatabaseService {
   readRows(input: DbReadRowsInput): Promise<DbRowsPage> {
     const { sessionId, ...rest } = input;
     return this.withSession(sessionId, (session) => session.driver.readRows(rest));
+  }
+
+  /**
+   * The grid's edits to one table. The renderer sends what changed, not SQL: main reads the
+   * table itself, checks every column is one of its columns and every update and delete names
+   * its row by the whole primary key, then writes the statements with each value bound as a
+   * parameter and runs them in one transaction.
+   */
+  applyRowEdits(input: DbRowEditsInput): Promise<DbRowEditsOutcome> {
+    return this.withSession(input.sessionId, async (session) => {
+      if (session.readOnly) {
+        throw new Error('This connection is read-only, so its rows are not edited here.');
+      }
+      if (input.edits.length === 0) return { status: 'done', affectedRows: 0 };
+      const table = await session.driver.describe(input.ref);
+      if (table.kind !== 'table') throw new Error(`${table.ref.name} is not a table.`);
+      checkRowEdits(table, input.edits);
+      const edits = input.edits as RowEdit[];
+      if (session.driver.applyEdits && canBindRowEdits(session.engine)) {
+        const statements = buildRowEditStatements(session.engine, table.ref, table.columns, edits);
+        try {
+          return {
+            status: 'done',
+            ...(await session.driver.applyEdits(statements, table.ref.database ?? null)),
+          };
+        } catch (error) {
+          return { status: 'failed', error: describeError(error) };
+        }
+      }
+      // CQL has no transaction to bind into, and its strings have no escapes beyond a doubled
+      // quote, so Cassandra's edits run as the literal statements the preview shows.
+      const outcome = await session.driver.query(
+        buildRowEdits(session.engine, table.ref, table.columns, edits),
+        {
+          database: table.ref.database ?? null,
+          maxRows: 1,
+          readOnly: false,
+          signal: new AbortController().signal,
+        },
+      );
+      if (outcome.error) return { status: 'failed', error: outcome.error.message };
+      const affectedRows = outcome.results.reduce((sum, one) => sum + (one.affectedRows ?? 0), 0);
+      return { status: 'done', affectedRows };
+    });
   }
 
   // ---------------------------------------------------------------------------------- queries

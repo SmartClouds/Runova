@@ -1,6 +1,6 @@
 import { isIP } from 'node:net';
 import { checkServerIdentity } from 'node:tls';
-import { parseMongoShell, parseMongoValue } from '@runova/core';
+import { parseMongoShell, parseMongoValue, urlHost } from '@runova/core';
 import { BSON, MongoClient, type MongoClientOptions } from 'mongodb';
 import type {
   DbColumn,
@@ -83,10 +83,20 @@ export function mongoClientOptions(options: DriverConnectOptions): MongoClientOp
   };
 }
 
+/**
+ * The URL the driver dials. The host is written with urlHost, so a saved host that holds URL
+ * characters cannot add options (tlsInsecure, authSource) or another address to it. Everything
+ * else goes in the client options.
+ */
+export function mongoUrl(options: Pick<DriverConnectOptions, 'host' | 'port' | 'srv'>): string {
+  const host = urlHost(options.host);
+  return options.srv
+    ? `mongodb+srv://${host}/`
+    : `mongodb://${host}:${Number(options.port ?? 27017)}/`;
+}
+
 export async function openMongo(options: DriverConnectOptions): Promise<DbDriver> {
-  const host = options.srv ? options.host : `${options.host}:${options.port ?? 27017}`;
-  const url = `${options.srv ? 'mongodb+srv' : 'mongodb'}://${host}/`;
-  const client = new MongoClient(url, mongoClientOptions(options));
+  const client = new MongoClient(mongoUrl(options), mongoClientOptions(options));
   try {
     await client.connect();
     await client.db('admin').command({ ping: 1 });

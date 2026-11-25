@@ -210,11 +210,12 @@ export async function openCassandra(options: DriverConnectOptions): Promise<DbDr
     async readRows(input: Omit<DbReadRowsInput, 'sessionId'>): Promise<DbRowsPage> {
       const table = await describe(input.ref);
       const offset = Math.min(input.offset, MAX_OFFSET);
-      const text = buildReadRows('cassandra', table.ref, {
-        ...input,
-        limit: offset + input.limit,
-        offset: 0,
-      });
+      const text = buildReadRows(
+        'cassandra',
+        table.ref,
+        { ...input, limit: offset + input.limit, offset: 0 },
+        table.columns.map((column) => column.name),
+      );
       const started = Date.now();
       const result = await execute(text, [], offset + input.limit);
       const page = cqlResult(result.columns, result.rows.slice(offset), text, started, input.limit);

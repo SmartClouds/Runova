@@ -309,6 +309,98 @@ export function buildRowEdits(
   return (wrap ? [wrap[0], ...statements, wrap[1]] : statements).join('\n');
 }
 
+/** A value bound to a statement as a parameter, never written into its text. */
+export type SqlParam = string | number | boolean | null;
+
+export interface BoundStatement {
+  text: string;
+  params: SqlParam[];
+}
+
+/** The engines whose drivers take bound parameters for the grid's edits. */
+const BOUND_ENGINES = new Set<DbEngine>(['postgres', 'mysql', 'mariadb', 'sqlite', 'mssql']);
+
+export function canBindRowEdits(engine: DbEngine): boolean {
+  return BOUND_ENGINES.has(engine);
+}
+
+/** The n-th (from 1) placeholder in a statement, in the engine's own style. */
+function placeholder(engine: DbEngine, n: number): string {
+  if (engine === 'postgres') return `$${n}`;
+  if (engine === 'mssql') return `@p${n}`;
+  return '?';
+}
+
+/** A value from the grid as a parameter for its column: a boolean column takes true or false. */
+function paramFor(value: unknown, columnType: string | null): SqlParam {
+  if (value === null || value === undefined) return null;
+  if (/^bool/i.test(columnType?.trim() ?? '')) {
+    const text = String(value).toLowerCase();
+    if (text === 'true' || text === '1' || text === 't') return true;
+    if (text === 'false' || text === '0' || text === 'f') return false;
+  }
+  if (typeof value === 'string' || typeof value === 'boolean') return value;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : String(value);
+  return JSON.stringify(value);
+}
+
+/**
+ * The grid's pending edits as statements with every value bound as a parameter, for the driver
+ * to run in one transaction. Names are quoted, NULL is written as the keyword (so a NULL never
+ * needs a type), and every update and delete names its row by key.
+ */
+export function buildRowEditStatements(
+  engine: DbEngine,
+  ref: DbObjectRef,
+  columns: readonly { name: string; type: string | null }[],
+  edits: readonly RowEdit[],
+): BoundStatement[] {
+  if (!canBindRowEdits(engine)) throw new Error(`${engine} rows are not edited with parameters.`);
+  const table = qualifiedName(engine, ref);
+  const typeOf = new Map(columns.map((column) => [column.name, column.type]));
+  const q = (name: string) => quoteIdentifier(engine, name);
+  return edits.map((edit) => {
+    const params: SqlParam[] = [];
+    const bind = (name: string, value: unknown): string => {
+      const param = paramFor(value, typeOf.get(name) ?? null);
+      if (param === null) return 'NULL';
+      params.push(param);
+      return placeholder(engine, params.length);
+    };
+    const where = (key: Record<string, unknown>) => {
+      const entries = Object.entries(key);
+      if (entries.length === 0) throw new Error('A row edit needs the key that picks out its row.');
+      return entries
+        .map(([name, value]) =>
+          value === null || value === undefined
+            ? `${q(name)} IS NULL`
+            : `${q(name)} = ${bind(name, value)}`,
+        )
+        .join(' AND ');
+    };
+    switch (edit.kind) {
+      case 'update': {
+        const entries = Object.entries(edit.values);
+        if (entries.length === 0) throw new Error('A row edit needs at least one value to set.');
+        const sets = entries.map(([name, value]) => `${q(name)} = ${bind(name, value)}`);
+        return { text: `UPDATE ${table} SET ${sets.join(', ')} WHERE ${where(edit.key)}`, params };
+      }
+      case 'insert': {
+        const names = Object.keys(edit.values);
+        const text =
+          names.length === 0
+            ? engine === 'mysql' || engine === 'mariadb'
+              ? `INSERT INTO ${table} () VALUES ()`
+              : `INSERT INTO ${table} DEFAULT VALUES`
+            : `INSERT INTO ${table} (${names.map(q).join(', ')}) VALUES (${names.map((name) => bind(name, edit.values[name])).join(', ')})`;
+        return { text, params };
+      }
+      case 'delete':
+        return { text: `DELETE FROM ${table} WHERE ${where(edit.key)}`, params };
+    }
+  });
+}
+
 const TYPES: Partial<Record<DbEngine, string[]>> = {
   postgres: [
     'integer',

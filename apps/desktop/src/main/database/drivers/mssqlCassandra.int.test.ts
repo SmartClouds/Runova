@@ -1,5 +1,11 @@
 import { randomBytes } from 'node:crypto';
-import { maintenanceActions, maintenanceStatements } from '@runova/core';
+import {
+  buildRowEditStatements,
+  maintenanceActions,
+  maintenanceStatements,
+  qualifiedName,
+  quoteIdentifier,
+} from '@runova/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { openDriver } from './index';
 import {
@@ -127,6 +133,79 @@ describe.skipIf(!EXISTING_MSSQL && (!dockerAvailable() || !imageUsable(MSSQL_IMA
         (await run(driver, 'SELECT COUNT(*) AS n FROM dbo.items', false, MSSQL_DB)).results[0]
           ?.rows,
       ).toEqual([[2]]);
+    });
+
+    it('treats hostile names and values in its own SQL as names and data', async () => {
+      const ref = { database: MSSQL_DB, schema: 'dbo', name: 'x]; DROP TABLE dbo.items; --' };
+      const column = 'c]"\'; DROP TABLE dbo.items; --';
+      const created = await run(
+        driver,
+        `CREATE TABLE ${qualifiedName('mssql', ref)} (id bigint PRIMARY KEY, ${quoteIdentifier('mssql', column)} nvarchar(200), flag bit)`,
+        false,
+        MSSQL_DB,
+      );
+      expect(created.error).toBeUndefined();
+      const values = [
+        "'; DROP TABLE dbo.items; --",
+        "' OR '1'='1",
+        "N'x' + N'y'",
+        '100%_done',
+        'é ü',
+      ];
+      try {
+        const table = await driver.describe(ref);
+        expect(table.columns.map((one) => one.name)).toEqual(['id', column, 'flag']);
+        const inserts = buildRowEditStatements(
+          'mssql',
+          table.ref,
+          table.columns,
+          values.map((value, index) => ({
+            kind: 'insert' as const,
+            values: {
+              id: String(9_007_199_254_740_993n + BigInt(index)),
+              [column]: value,
+              flag: index % 2 === 0,
+            },
+          })),
+        );
+        expect(await driver.applyEdits?.(inserts, null)).toEqual({ affectedRows: values.length });
+        const update = buildRowEditStatements('mssql', table.ref, table.columns, [
+          { kind: 'update', key: { [column]: "' OR '1'='1" }, values: { [column]: 'matched' } },
+          { kind: 'delete', key: { [column]: "nothing' OR '1'='1" } },
+        ]);
+        expect(await driver.applyEdits?.(update, null)).toEqual({ affectedRows: 1 });
+        const page = await driver.readRows({
+          ref,
+          limit: 50,
+          offset: 0,
+          orderBy: { column: 'id', direction: 'asc' },
+        });
+        expect(page.result.rows.map((row) => [row[0], row[1], row[2]])).toEqual(
+          values.map((value, index) => [
+            String(9_007_199_254_740_993n + BigInt(index)),
+            value === "' OR '1'='1" ? 'matched' : value,
+            index % 2 === 0,
+          ]),
+        );
+        await expect(
+          driver.readRows({
+            ref,
+            limit: 5,
+            offset: 0,
+            filter: '1=1) COMMIT DROP TABLE dbo.items SELECT 1 WHERE (1=1',
+          }),
+        ).rejects.toThrow(/one condition/);
+        // A hostile schema is a value to look up, and matches no schema.
+        await expect(
+          driver.describe({ database: MSSQL_DB, schema: "dbo' OR '1'='1", name: 'items' }),
+        ).rejects.toThrow(/no table/);
+      } finally {
+        await run(driver, `DROP TABLE ${qualifiedName('mssql', ref)}`, false, MSSQL_DB);
+      }
+      expect(
+        (await run(driver, 'SELECT name FROM dbo.items ORDER BY id', false, MSSQL_DB)).results[0]
+          ?.rows,
+      ).toEqual([['apple'], ['pear']]);
     });
 
     it('reports a refused password as such', async () => {

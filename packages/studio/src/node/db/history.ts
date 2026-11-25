@@ -248,9 +248,16 @@ export class HistoryDb {
   private constructor(private readonly db: SqlDriver) {}
 
   static open(openDb: OpenSqlDriver, file: string, options: HistoryDbOptions = {}): HistoryDb {
+    // A pragma's value cannot be a parameter, so it goes into the text only as a checked integer.
+    const busyTimeoutMs = options.busyTimeoutMs ?? 2000;
+    if (!Number.isSafeInteger(busyTimeoutMs) || busyTimeoutMs < 0) {
+      throw new Error(
+        `busyTimeoutMs must be a whole number of milliseconds, got ${busyTimeoutMs}.`,
+      );
+    }
     const db = openDb(file);
     try {
-      db.pragma(`busy_timeout = ${options.busyTimeoutMs ?? 2000}`);
+      db.pragma(`busy_timeout = ${busyTimeoutMs}`);
       // One writer, held for as long as the video is open: the hard backstop behind the lock file.
       db.pragma('locking_mode = EXCLUSIVE');
       db.pragma(`journal_mode = ${options.network ? 'DELETE' : 'WAL'}`);
@@ -406,6 +413,13 @@ export class HistoryDb {
   updateGeneration(id: string, patch: GenerationPatch): void {
     const keys = Object.keys(patch) as (keyof GenerationPatch)[];
     if (keys.length === 0) return;
+    // Column names cannot be parameters, so every key has to be one of the fixed columns. The
+    // patch's own key never reaches the SQL, only the column it maps to.
+    for (const key of keys) {
+      if (!Object.hasOwn(GENERATION_COLUMNS, key)) {
+        throw new Error(`Unknown generation field: ${JSON.stringify(key)}`);
+      }
+    }
     const values = keys.map((key) => {
       const value = patch[key];
       if (key === 'attempts' || key === 'proposal') {

@@ -1,5 +1,6 @@
 import { PassThrough } from 'node:stream';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { DbTableDescription } from '../../shared/databaseTypes';
 import type {
   ContainerDetails,
   ContainerList,
@@ -1008,5 +1009,136 @@ describe('TLS certificate checks', () => {
       tls: true,
     });
     await expect(service.connect(saved.id)).rejects.toThrow(/sslmode=require/);
+  });
+});
+
+describe('grid edits', () => {
+  const users: DbTableDescription = {
+    ref: { database: 'shop', schema: 'public', name: 'users' },
+    kind: 'table',
+    columns: [
+      {
+        name: 'id',
+        type: 'integer',
+        nullable: false,
+        defaultValue: null,
+        primaryKey: true,
+        generated: true,
+      },
+      {
+        name: 'name',
+        type: 'text',
+        nullable: true,
+        defaultValue: null,
+        primaryKey: false,
+        generated: false,
+      },
+    ],
+    indexes: [],
+    rowEstimate: 2,
+    definition: null,
+  };
+  const DROP = "'; DROP TABLE users; --";
+  const ALWAYS = "' OR '1'='1";
+
+  async function connected(overrides: Partial<DbDriver> = {}) {
+    const applyEdits = vi.fn(async () => ({ affectedRows: 2 }));
+    const driver = fakeDriver({ describe: vi.fn(async () => users), applyEdits, ...overrides });
+    const h = harness({ open: async () => driver });
+    const result = await h.service.connectCandidate({ serverId: 's1', containerId: 'c-pg' });
+    if (!('sessionId' in result)) throw new Error('not connected');
+    return { ...h, driver, applyEdits, sessionId: result.sessionId };
+  }
+
+  it('writes the statements itself, binding every value, and runs no SQL text', async () => {
+    const { service, driver, applyEdits, sessionId } = await connected();
+    const outcome = await service.applyRowEdits({
+      sessionId,
+      ref: { schema: 'public', name: 'users' },
+      edits: [
+        { kind: 'update', key: { id: ALWAYS }, values: { name: DROP } },
+        { kind: 'delete', key: { id: DROP } },
+      ],
+    });
+    expect(outcome).toEqual({ status: 'done', affectedRows: 2 });
+    expect(applyEdits).toHaveBeenCalledWith(
+      [
+        { text: 'UPDATE "public"."users" SET "name" = $1 WHERE "id" = $2', params: [DROP, ALWAYS] },
+        { text: 'DELETE FROM "public"."users" WHERE "id" = $1', params: [DROP] },
+      ],
+      'shop',
+    );
+    expect(driver.query).not.toHaveBeenCalled();
+  });
+
+  it('turns down a column the table does not have, whatever its name holds', async () => {
+    const { service, applyEdits, sessionId } = await connected();
+    await expect(
+      service.applyRowEdits({
+        sessionId,
+        ref: { name: 'users' },
+        edits: [{ kind: 'insert', values: { 'name") VALUES (1); DROP TABLE users; --': 'x' } }],
+      }),
+    ).rejects.toThrow(/no column/);
+    expect(applyEdits).not.toHaveBeenCalled();
+  });
+
+  it('turns down an update or delete that does not pick its row by the whole primary key', async () => {
+    const { service, applyEdits, sessionId } = await connected();
+    const keys: Record<string, string | number>[] = [{}, { name: 'Ada' }, { id: 1, name: 'Ada' }];
+    for (const key of keys) {
+      await expect(
+        service.applyRowEdits({
+          sessionId,
+          ref: { name: 'users' },
+          edits: [{ kind: 'delete', key }],
+        }),
+      ).rejects.toThrow(/primary key/);
+    }
+    expect(applyEdits).not.toHaveBeenCalled();
+  });
+
+  it('turns down edits to a view and on a read-only connection', async () => {
+    const view = await connected({
+      describe: vi.fn(async () => ({ ...users, kind: 'view' as const })),
+    });
+    await expect(
+      view.service.applyRowEdits({
+        sessionId: view.sessionId,
+        ref: { name: 'users' },
+        edits: [{ kind: 'delete', key: { id: 1 } }],
+      }),
+    ).rejects.toThrow(/not a table/);
+
+    const h = await connected();
+    const saved = (await h.service.listConnections())[0];
+    if (!saved) throw new Error('nothing saved');
+    await h.service.saveConnection({ ...saved, readOnly: true });
+    await h.service.disconnect(h.sessionId);
+    const again = await h.service.connect(saved.id);
+    if (!('sessionId' in again)) throw new Error('not connected');
+    await expect(
+      h.service.applyRowEdits({
+        sessionId: again.sessionId,
+        ref: { name: 'users' },
+        edits: [{ kind: 'delete', key: { id: 1 } }],
+      }),
+    ).rejects.toThrow(/read-only/);
+    expect(h.applyEdits).not.toHaveBeenCalled();
+  });
+
+  it('reports a failed transaction as nothing changed', async () => {
+    const { service, sessionId } = await connected({
+      applyEdits: vi.fn(async () => {
+        throw new DriverError('duplicate key value violates unique constraint');
+      }),
+    });
+    expect(
+      await service.applyRowEdits({
+        sessionId,
+        ref: { name: 'users' },
+        edits: [{ kind: 'insert', values: { id: 1 } }],
+      }),
+    ).toEqual({ status: 'failed', error: 'duplicate key value violates unique constraint' });
   });
 });

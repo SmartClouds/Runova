@@ -272,3 +272,175 @@ describe('HistoryDb code revisions', () => {
     expect(() => db.unsafeExec("UPDATE code_revisions SET label = 'x'")).toThrow(/append-only/);
   });
 });
+
+describe('HistoryDb hostile input is data, never SQL', () => {
+  const ALWAYS_TRUE = "' OR '1'='1";
+  const HOSTILE = [
+    "'; DROP TABLE txs; --",
+    ALWAYS_TRUE,
+    '" OR "1"="1',
+    "x'); DELETE FROM meta; --",
+    "it''s doubled",
+    '%_\\',
+  ];
+
+  const generation = (over: Partial<NewGeneration> = {}): NewGeneration => ({
+    id: 'g1',
+    parentId: null,
+    stage: 'scenario',
+    status: 'running',
+    cliId: 'claude-code',
+    cliName: null,
+    model: 'opus',
+    effort: 'high',
+    instruction: 'A video about water',
+    params: { targetSeconds: 45, styleId: null },
+    startedAt: 1000,
+    ...over,
+  });
+
+  it('stores hostile labels, ids and metadata verbatim and reads each back by its own key', async () => {
+    const db = await openDb();
+    db.setMeta('plain', 'kept');
+    for (const [index, text] of HOSTILE.entries()) {
+      db.append(tx({ label: text, generationId: text }));
+      db.addRevision({ seq: index + 1, at: index, label: text, kind: 'milestone' });
+      db.setMeta(text, text);
+    }
+
+    expect(db.entries({ limit: 50 }).map((e) => [e.label, e.generationId])).toEqual(
+      [...HOSTILE].reverse().map((text) => [text, text]),
+    );
+    expect(db.revisions().map((r) => r.label)).toEqual(HOSTILE);
+    for (const text of HOSTILE) expect(db.getMeta(text)).toBe(text);
+    expect(db.getMeta('plain')).toBe('kept');
+    expect(db.getMeta(`${ALWAYS_TRUE} --`)).toBeNull();
+    expect(db.head()).toBe(HOSTILE.length);
+  });
+
+  it('updates and finds only the generation whose hostile id it is given', async () => {
+    const db = await openDb();
+    db.addGeneration(generation({ id: 'plain' }));
+    for (const [index, text] of HOSTILE.entries()) {
+      db.addGeneration(
+        generation({
+          id: text,
+          parentId: text,
+          cliName: text,
+          model: text,
+          instruction: text,
+          startedAt: 2000 + index,
+        }),
+      );
+    }
+
+    db.updateGeneration(ALWAYS_TRUE, { status: 'failed', error: ALWAYS_TRUE });
+
+    expect(db.generation(ALWAYS_TRUE)).toMatchObject({
+      id: ALWAYS_TRUE,
+      parentId: ALWAYS_TRUE,
+      instruction: ALWAYS_TRUE,
+      status: 'failed',
+      error: ALWAYS_TRUE,
+    });
+    expect(db.generation('plain')).toMatchObject({ status: 'running', error: null });
+    expect(db.generations({ limit: 50 }).filter((g) => g.status === 'failed')).toHaveLength(1);
+    expect(db.generation(`${ALWAYS_TRUE} --`)).toBeUndefined();
+  });
+
+  it('closes every waiting proposal except the one whose hostile id it keeps', async () => {
+    const db = await openDb();
+    db.addGeneration(generation({ id: 'plain', status: 'proposed' }));
+    db.addGeneration(generation({ id: ALWAYS_TRUE, status: 'proposed' }));
+
+    expect(db.discardProposals(ALWAYS_TRUE)).toBe(1);
+
+    expect(db.generation(ALWAYS_TRUE)?.status).toBe('proposed');
+    expect(db.generation('plain')?.status).toBe('discarded');
+  });
+
+  it('refuses a generation field that is not one of its columns', async () => {
+    const db = await openDb();
+    db.addGeneration(generation());
+
+    expect(() =>
+      db.updateGeneration('g1', { "status = 'done', instruction": 'x' } as never),
+    ).toThrow(/Unknown generation field/);
+    expect(() => db.updateGeneration('g1', { constructor: 'x' } as never)).toThrow(
+      /Unknown generation field/,
+    );
+    expect(db.generation('g1')).toMatchObject({
+      status: 'running',
+      instruction: 'A video about water',
+    });
+  });
+
+  it('keeps code revisions under hostile scene ids apart', async () => {
+    const db = await openDb();
+    db.addCodeRevision({
+      sceneId: 'plain',
+      treeHash: 'a'.repeat(64),
+      parentId: null,
+      generationId: null,
+      author: 'user',
+      label: 'plain',
+      at: 1,
+    });
+    for (const text of HOSTILE) {
+      db.addCodeRevision({
+        sceneId: text,
+        treeHash: text,
+        parentId: null,
+        generationId: text,
+        author: 'ai',
+        label: text,
+        at: 2,
+      });
+    }
+
+    for (const text of HOSTILE) {
+      expect(db.codeRevisions(text).map((r) => [r.sceneId, r.treeHash, r.label])).toEqual([
+        [text, text, text],
+      ]);
+    }
+    expect(db.codeRevisions('plain')).toHaveLength(1);
+  });
+
+  it('records imported media with hostile names and hashes verbatim', async () => {
+    const db = await openDb();
+    const info = {
+      duration: null,
+      width: 10,
+      height: 10,
+      fps: null,
+      hasAudio: false,
+      hasVideo: true,
+    };
+    db.addMedia({ hash: 'plain', name: 'plain.png', kind: 'image', info, bytes: 1, importedAt: 1 });
+    for (const text of HOSTILE) {
+      const stored = db.addMedia({
+        hash: text,
+        name: text,
+        kind: 'image',
+        info,
+        bytes: 2,
+        importedAt: 2,
+      });
+      expect(stored).toMatchObject({ hash: text, name: text });
+    }
+
+    for (const text of HOSTILE) expect(db.media(text)?.name).toBe(text);
+    expect(db.media(`${ALWAYS_TRUE} --`)).toBeUndefined();
+    expect(db.media('plain')?.name).toBe('plain.png');
+    expect(db.mediaList()).toHaveLength(HOSTILE.length + 1);
+  });
+
+  it('refuses a busy timeout that is not a whole number before it reaches the pragma', async () => {
+    const file = join(await tempDir(), 'studio.db');
+    for (const bad of ['0; PRAGMA writable_schema = 1', 1.5, -1, Number.NaN]) {
+      expect(() => HistoryDb.open(openNodeSqlite, file, { busyTimeoutMs: bad as never })).toThrow(
+        /busyTimeoutMs/,
+      );
+    }
+  });
+});

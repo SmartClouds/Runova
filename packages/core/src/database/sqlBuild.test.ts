@@ -37,7 +37,15 @@ describe('quoteLiteral', () => {
 
   it('escapes backslashes for MySQL, which reads them inside strings', () => {
     expect(quoteLiteral('mysql', 'a\\b')).toBe("'a\\\\b'");
-    expect(quoteLiteral('postgres', 'a\\b')).toBe("'a\\b'");
+    expect(quoteLiteral('sqlite', 'a\\b')).toBe("'a\\b'");
+  });
+
+  it('writes PostgreSQL text with a backslash as E-string, safe with standard_conforming_strings off', () => {
+    expect(quoteLiteral('postgres', 'a\\b')).toBe("E'a\\\\b'");
+    // In a plain '...' string on such a server, \' escapes the quote and the rest would run.
+    const hostile = "\\'; DROP TABLE users; --";
+    expect(quoteLiteral('postgres', hostile)).toBe("E'\\\\''; DROP TABLE users; --'");
+    expect(quoteLiteral('postgres', "it's")).toBe("'it''s'");
   });
 
   it('marks SQL Server strings as Unicode', () => {
@@ -145,6 +153,148 @@ describe('buildReadRows', () => {
     expect(
       buildReadRows('postgres', { name: 't' }, { limit: 5, offset: 0, filter: "name = 'a;b'" }),
     ).toBe(`SELECT * FROM "t" WHERE (name = 'a;b') LIMIT 5 OFFSET 0`);
+  });
+});
+
+describe('buildReadRows with hostile input', () => {
+  const ENGINES = ['postgres', 'mysql', 'mariadb', 'sqlite', 'mssql'] as const;
+  const page = { limit: 10, offset: 0 };
+
+  it('keeps a table, schema and database name that tries to end the statement a name', () => {
+    const name = 'x"; DROP TABLE y; --';
+    expect(buildReadRows('postgres', { schema: 's"x', name }, page)).toBe(
+      'SELECT * FROM "s""x"."x""; DROP TABLE y; --" LIMIT 10 OFFSET 0',
+    );
+    expect(buildReadRows('sqlite', { name }, page)).toBe(
+      'SELECT * FROM "x""; DROP TABLE y; --" LIMIT 10 OFFSET 0',
+    );
+    expect(buildReadRows('mysql', { database: 'd`b', name: 'x`; DROP TABLE y; --' }, page)).toBe(
+      'SELECT * FROM `d``b`.`x``; DROP TABLE y; --` LIMIT 10 OFFSET 0',
+    );
+    expect(
+      buildReadRows(
+        'mssql',
+        { database: 'd]b', schema: 'dbo', name: 'x]; DROP TABLE y; --' },
+        page,
+      ),
+    ).toBe(
+      'SELECT * FROM [d]]b].[dbo].[x]]; DROP TABLE y; --] ORDER BY (SELECT NULL) OFFSET 0 ROWS FETCH NEXT 10 ROWS ONLY',
+    );
+  });
+
+  it('keeps a dotted name one name instead of splitting it into schema and table', () => {
+    expect(buildReadRows('postgres', { schema: 'public', name: 'a.b' }, page)).toBe(
+      'SELECT * FROM "public"."a.b" LIMIT 10 OFFSET 0',
+    );
+  });
+
+  it('quotes a sort column full of quote characters, and only ever sorts ASC or DESC', () => {
+    const column = 'c"`]\'; DROP TABLE y; --';
+    for (const engine of ENGINES) {
+      const sql = buildReadRows(
+        engine,
+        { name: 't' },
+        {
+          ...page,
+          orderBy: { column, direction: 'ASC; DROP TABLE y' as 'asc' },
+        },
+      );
+      expect(sql).toContain(`ORDER BY ${quoteIdentifier(engine, column)} ASC`);
+      expect(sql).not.toMatch(/ASC; DROP/);
+    }
+    const desc = buildReadRows(
+      'postgres',
+      { name: 't' },
+      {
+        ...page,
+        orderBy: { column: 'id', direction: 'desc' },
+      },
+    );
+    expect(desc).toContain('ORDER BY "id" DESC');
+  });
+
+  it('refuses to sort by a column the table does not have, when it knows the columns', () => {
+    expect(() =>
+      buildReadRows(
+        'sqlite',
+        { name: 't' },
+        { ...page, orderBy: { column: 'id) DESC; DROP TABLE t; --', direction: 'asc' } },
+        ['id', 'name'],
+      ),
+    ).toThrow(/no column/);
+    expect(
+      buildReadRows(
+        'sqlite',
+        { name: 't' },
+        { ...page, orderBy: { column: 'name', direction: 'asc' } },
+        ['id', 'name'],
+      ),
+    ).toBe('SELECT * FROM "t" ORDER BY "name" ASC LIMIT 10 OFFSET 0');
+  });
+
+  it('refuses a page size or offset that is not a whole number, whatever it holds', () => {
+    for (const bad of ['10; DROP TABLE t', Number.POSITIVE_INFINITY, 1e20, -5, '10'] as unknown[]) {
+      expect(() =>
+        buildReadRows('postgres', { name: 't' }, { limit: bad as number, offset: 0 }),
+      ).toThrow(/whole number/);
+      expect(() =>
+        buildReadRows('postgres', { name: 't' }, { limit: 10, offset: bad as number }),
+      ).toThrow(/whole number/);
+    }
+  });
+
+  it('refuses a filter that closes the WHERE bracket to add SQL of its own', () => {
+    for (const engine of ENGINES) {
+      for (const filter of [
+        '1=1) UNION SELECT password FROM users --',
+        '1=1) COMMIT DROP TABLE y SELECT * FROM t WHERE (1=1',
+        '(1=1',
+        ') OR (1=1',
+      ]) {
+        expect(() => buildReadRows(engine, { name: 't' }, { ...page, filter })).toThrow(
+          /one condition/,
+        );
+      }
+    }
+  });
+
+  it('refuses a filter that hides a second statement in a PostgreSQL E-string', () => {
+    // A scanner that does not know E'...' sees one string here; the server ends it after \'
+    // and runs the rest.
+    const filter = "x = E'\\'' ) ; COMMIT; DROP TABLE y; SELECT ( '";
+    expect(() => buildReadRows('postgres', { name: 't' }, { ...page, filter })).toThrow(
+      /one condition/,
+    );
+  });
+
+  it('refuses a filter whose plain string ends early on a server reading backslash escapes', () => {
+    // With standard_conforming_strings on this is three short strings; with it off the first
+    // string runs to the second quote and the semicolon after it ends the statement.
+    const filter = "a = '\\' AND b = ';' AND c = '\\'";
+    expect(() => buildReadRows('postgres', { name: 't' }, { ...page, filter })).toThrow(
+      /one condition/,
+    );
+    expect(buildReadRows('sqlite', { name: 't' }, { ...page, filter })).toContain(
+      `WHERE (${filter})`,
+    );
+  });
+
+  it('allows brackets, quotes, % and _ that sit inside strings and names', () => {
+    expect(
+      buildReadRows(
+        'postgres',
+        { name: 't' },
+        {
+          ...page,
+          filter: `"we(ird" = ')' AND name LIKE '100\\%' ESCAPE '\\' AND (a OR b)`,
+        },
+      ),
+    ).toBe(
+      `SELECT * FROM "t" WHERE ("we(ird" = ')' AND name LIKE '100\\%' ESCAPE '\\' AND (a OR b)) LIMIT 10 OFFSET 0`,
+    );
+    expect(buildReadRows('mssql', { name: 't' }, { ...page, filter: "[a)b] = N'('" })).toContain(
+      "WHERE ([a)b] = N'(')",
+    );
   });
 });
 

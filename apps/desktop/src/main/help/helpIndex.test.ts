@@ -1,7 +1,9 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { ALWAYS_TRUE, dropTable, hostileSqlValues } from '../../test/main/hostileSqlInput';
 import type { HelpChunk } from './chunker';
 import { HelpIndex } from './helpIndex';
 
@@ -237,6 +239,87 @@ for (const vector of [true, false]) {
       expect(index.embeddedCount('e1')).toBe(2);
       expect(index.searchVector('e1', vec(0.1, 1), 1)).toEqual(['workspace#split#0']);
       expect(index.searchVector('e1', vec(1, 0, 0), 5)).toEqual([]);
+    });
+
+    describe('hostile input is data, never SQL', () => {
+      const hostile = hostileSqlValues('chunks');
+
+      it('stores passages with hostile ids and text verbatim and finds each by its own id', () => {
+        index.sync([...BASE, ...hostile.map((text) => chunk(text, text, `h-${text}`))]);
+        expect(index.getChunks(hostile).map((c) => [c.id, c.text])).toEqual(
+          hostile.map((text) => [text, text]),
+        );
+        expect(index.getChunks([ALWAYS_TRUE]).map((c) => c.id)).toEqual([ALWAYS_TRUE]);
+        expect(index.count()).toBe(BASE.length + hostile.length);
+
+        index.sync(BASE);
+        expect(index.getChunks(hostile)).toEqual([]);
+        expect(index.getChunks(BASE.map((c) => c.id))).toEqual(BASE);
+      });
+
+      it('reads FTS operators and quotes in a search as plain words', () => {
+        index.sync([...BASE, chunk('walk#river#0', 'Walk > River\n\nWalk near the river.')]);
+        // NEAR, NOT, column filters, stars and quotes are FTS5 syntax. Each must be a word here.
+        expect(index.searchText('NEAR', 5)).toEqual(['walk#river#0']);
+        expect(index.searchText('NEAR(vault deploy)', 5).sort()).toEqual([
+          'deploy#intro#0',
+          'vault#unlock#0',
+          'walk#river#0',
+        ]);
+        expect(index.searchText('NOT vault', 5)).toEqual(['vault#unlock#0']);
+        expect(index.searchText('text:master', 5)).toEqual(['vault#unlock#0']);
+        expect(index.searchText('"', 5)).toEqual([]);
+        expect(index.searchText('*', 5)).toEqual([]);
+        expect(index.searchText('^vault', 5)).toEqual(['vault#unlock#0']);
+        // A probe that would match everything in SQL matches nothing as words.
+        expect(index.searchText(ALWAYS_TRUE, 5)).toEqual([]);
+        expect(index.searchText(dropTable('chunks'), 5)).toEqual([]);
+        expect(index.count()).toBe(BASE.length + 1);
+      });
+
+      it('keeps vectors under hostile embedder names apart', () => {
+        index.sync(BASE);
+        for (const text of hostile) {
+          index.storeEmbeddings(text, [{ id: 'vault#unlock#0', vector: vec(1, 0, 0) }]);
+        }
+        index.storeEmbeddings('plain', [{ id: 'deploy#intro#0', vector: vec(1, 0, 0) }]);
+
+        expect(index.embedderIds()).toEqual([...hostile, 'plain'].sort());
+        for (const text of hostile) {
+          expect(index.embeddedCount(text)).toBe(1);
+          expect(index.searchVector(text, vec(1, 0, 0), 5)).toEqual(['vault#unlock#0']);
+        }
+
+        index.clearEmbeddings(ALWAYS_TRUE);
+        expect(index.embeddedCount(ALWAYS_TRUE)).toBe(0);
+        expect(index.embeddedCount('plain')).toBe(1);
+        expect(index.embedderIds()).toHaveLength(hostile.length);
+        expect(index.count()).toBe(BASE.length);
+      });
+
+      it('refuses a vector table name that was edited in the file into SQL', () => {
+        index.sync(BASE);
+        index.storeEmbeddings('e1', [{ id: 'vault#unlock#0', vector: vec(1, 0, 0) }]);
+        const file = new DatabaseSync(join(dir, 'help.db'));
+        try {
+          file
+            .prepare('INSERT OR REPLACE INTO vec_tables (embedder, name, dim) VALUES (?, ?, ?)')
+            .run('e1', 'vec_x; DROP TABLE chunks; --', 3);
+        } finally {
+          file.close();
+        }
+
+        // sqlite-vec reads the table by that name, so it finds nothing. The JavaScript fallback
+        // never looks at vec_tables and still compares the stored blobs.
+        expect(index.searchVector('e1', vec(1, 0, 0), 5)).toEqual(vector ? [] : ['vault#unlock#0']);
+        index.storeEmbeddings('e1', [{ id: 'deploy#intro#0', vector: vec(1, 0, 0) }]);
+        index.sync(BASE.slice(0, 2));
+        index.clearEmbeddings('e1');
+
+        expect(index.count()).toBe(2);
+        expect(index.searchText('master password', 5)).toEqual(['vault#unlock#0']);
+        expect(index.embedderIds()).toEqual([]);
+      });
     });
 
     it('keeps a clear across a reopen', () => {

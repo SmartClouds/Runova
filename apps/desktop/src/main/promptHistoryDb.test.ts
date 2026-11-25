@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AddPromptHistoryInput, PromptHistoryEntry } from '../shared/apiTypes';
+import { ALWAYS_TRUE, dropTable, hostileSqlValues } from '../test/main/hostileSqlInput';
 import { useTempUserData } from '../test/main/ipcHarness';
 
 /**
@@ -235,6 +236,99 @@ describe('search', () => {
     await addSpaced(db, 4);
 
     expect(db.search('entry', null, 2).map((one) => one.rawInput)).toEqual(['entry 3', 'entry 2']);
+  });
+});
+
+describe('hostile input is data, never SQL', () => {
+  const hostile = hostileSqlValues('prompt_history');
+
+  it('stores hostile text in every column and reads it back verbatim', async () => {
+    const db = await loadDb();
+    const bystander = db.add(input({ rawInput: 'bystander' }));
+    const added = hostile.map((text) =>
+      db.add(
+        input({ rawInput: text, content: text, promptType: text, targetAI: text, projectId: text }),
+      ),
+    );
+    for (const [index, entry] of added.entries()) db.setTags(entry.id, [hostile[index]!]);
+
+    const read = db.exportAll();
+    expect(read).toHaveLength(hostile.length + 1);
+    for (const [index, text] of hostile.entries()) {
+      const row = read.find((one) => one.id === added[index]!.id);
+      expect(row).toMatchObject({
+        rawInput: text,
+        content: text,
+        promptType: text,
+        targetAI: text,
+        projectId: text,
+        tags: [text],
+      });
+    }
+    expect(read.find((one) => one.id === bystander.id)).toEqual(bystander);
+  });
+
+  it('matches only the rows that literally hold the text, in search and in the project filter', async () => {
+    const db = await loadDb();
+    db.add(input({ rawInput: 'plain one', projectId: 'alpha' }));
+    db.add(input({ rawInput: 'plain two', projectId: 'beta' }));
+    const holder = db.add(
+      input({ rawInput: `before ${ALWAYS_TRUE} after`, projectId: ALWAYS_TRUE }),
+    );
+
+    expect(db.search(ALWAYS_TRUE).map((one) => one.id)).toEqual([holder.id]);
+    expect(db.search(dropTable('prompt_history'))).toEqual([]);
+    expect(db.list(ALWAYS_TRUE).map((one) => one.id)).toEqual([holder.id]);
+    expect(db.search('plain', ALWAYS_TRUE)).toEqual([]);
+    expect(db.list()).toHaveLength(3);
+  });
+
+  it('treats % and _ in a search as the characters themselves, not LIKE wildcards', async () => {
+    const db = await loadDb();
+    const percent = db.add(input({ rawInput: 'coverage at 100% now' }));
+    const underscore = db.add(input({ rawInput: 'rename to snake_case' }));
+    const backslash = db.add(input({ rawInput: 'path C:\\temp' }));
+    db.add(input({ rawInput: 'coverage at 1000 now' }));
+    db.add(input({ rawInput: 'rename to snakeXcase' }));
+
+    expect(db.search('%').map((one) => one.id)).toEqual([percent.id]);
+    expect(db.search('100%').map((one) => one.id)).toEqual([percent.id]);
+    expect(db.search('_').map((one) => one.id)).toEqual([underscore.id]);
+    expect(db.search('snake_case').map((one) => one.id)).toEqual([underscore.id]);
+    expect(db.search('\\').map((one) => one.id)).toEqual([backslash.id]);
+    expect(db.search('\\%')).toEqual([]);
+  });
+
+  it('removes, re-files and re-tags only the entry whose id it is given', async () => {
+    const db = await loadDb();
+    const kept = db.add(input({ rawInput: 'kept', projectId: 'alpha' }));
+
+    for (const text of hostile) {
+      db.remove(text);
+      db.setProject(text, 'moved');
+      db.setTags(text, ['tagged']);
+    }
+
+    expect(db.exportAll()).toEqual([kept]);
+  });
+
+  it('restores a backup full of hostile text without running any of it', async () => {
+    const db = await loadDb();
+    const restored: PromptHistoryEntry[] = hostile.map((text, index) => ({
+      id: text,
+      rawInput: text,
+      promptType: text,
+      targetAI: text,
+      content: text,
+      source: 'generate',
+      tags: [text],
+      projectId: text,
+      createdAt: `2026-02-02T00:00:0${index}.000Z`,
+    }));
+
+    db.importAll(restored);
+
+    expect(db.exportAll()).toEqual([...restored].reverse());
   });
 });
 

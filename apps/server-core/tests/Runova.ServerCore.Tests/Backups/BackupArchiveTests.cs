@@ -105,6 +105,43 @@ public sealed class BackupArchiveTests : IDisposable
     }
 
     [Fact]
+    public async Task A_scratch_folder_named_like_sql_is_only_where_the_snapshot_goes()
+    {
+        // VACUUM INTO gets the snapshot's path as a bound parameter, so a quote in it ends nothing.
+        const string Hostile = "it's'; DROP TABLE AspNetUsers; --";
+        var data = Path.Combine(_root, "data");
+        await CoreDatabase.PrepareAsync(CoreDatabase.PathIn(data), Cancel);
+        await using (var db = new CoreDbContext(CoreDatabase.Options(CoreDatabase.PathIn(data))))
+        {
+            db.Users.Add(new CoreUser { UserName = Hostile });
+            await db.SaveChangesAsync(Cancel);
+        }
+
+        var work = Path.Combine(_root, Hostile);
+        Directory.CreateDirectory(work);
+        using var output = new MemoryStream();
+
+        var manifest = await BackupArchive.WriteAsync(data, work, output, "1.2.0", "web-01", 42, Cancel);
+
+        Assert.True(File.Exists(Path.Combine(work, CoreDatabase.FileName)));
+        Assert.Equal(["data", Hostile], Directory.EnumerateFileSystemEntries(_root).Select(p => Path.GetFileName(p)).Order(StringComparer.Ordinal));
+        Assert.Equal(1, manifest.Contents.Users);
+        Assert.Contains(CoreDatabase.FileName, Names(output.ToArray()));
+        await using (var source = new CoreDbContext(CoreDatabase.Options(CoreDatabase.PathIn(data))))
+        {
+            Assert.Equal([Hostile], await source.Users.Select(u => u.UserName).ToListAsync(Cancel));
+        }
+
+        await using (var snapshot = new CoreDbContext(CoreDatabase.Options(Path.Combine(work, CoreDatabase.FileName))))
+        {
+            Assert.Equal([Hostile], await snapshot.Users.Select(u => u.UserName).ToListAsync(Cancel));
+        }
+
+        CoreDatabase.ReleasePool(CoreDatabase.PathIn(data));
+        CoreDatabase.ReleasePool(Path.Combine(work, CoreDatabase.FileName));
+    }
+
+    [Fact]
     public async Task A_staged_backup_matches_what_the_core_knows()
     {
         var (data, payload) = await PayloadAsync();

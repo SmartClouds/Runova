@@ -41,6 +41,14 @@ function rowToEntry(row: PromptHistoryRow): PromptHistoryEntry {
   };
 }
 
+/**
+ * A search for "50%" or "snake_case" means those characters, not LIKE's wildcards, so `%`, `_` and
+ * the escape character itself are escaped before the text goes into the pattern.
+ */
+function escapeLike(text: string): string {
+  return text.replace(/[\\%_]/g, (char) => `\\${char}`);
+}
+
 function getDb(): Database.Database {
   if (db) return db;
   const dir = join(app.getPath('userData'), 'data');
@@ -107,9 +115,9 @@ export const promptHistoryDb = {
   },
 
   search(query: string, projectId?: string | null, limit = 200): PromptHistoryEntry[] {
-    const like = `%${query}%`;
-    const matches =
-      '(raw_input LIKE @like OR content LIKE @like OR prompt_type LIKE @like OR target_ai LIKE @like)';
+    const like = `%${escapeLike(query)}%`;
+    const matches = `(raw_input LIKE @like ESCAPE '\\' OR content LIKE @like ESCAPE '\\'
+      OR prompt_type LIKE @like ESCAPE '\\' OR target_ai LIKE @like ESCAPE '\\')`;
     const rows = getDb()
       .prepare(
         `SELECT * FROM prompt_history

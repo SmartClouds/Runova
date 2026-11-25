@@ -302,4 +302,12 @@ describe('maskSecret', () => {
     );
     expect(maskSecret('x', '')).toBe('x');
   });
+
+  it('hides a password with quotes and backslashes in the form each engine writes it', () => {
+    const secret = "it's\\x";
+    for (const engine of ['postgres', 'mysql', 'mssql'] as const) {
+      const [statement] = createUserStatements(engine, { user: 'app', password: secret });
+      expect(maskSecret(statement ?? '', secret)).not.toMatch(/it'|\\x/);
+    }
+  });
 });

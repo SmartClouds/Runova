@@ -105,6 +105,39 @@ public sealed class EncryptedItemsTests(PostgresFixture postgres) : IAsyncLifeti
     }
 
     [Fact]
+    public async Task An_item_that_reads_as_sql_is_refused_at_the_door_and_kept_as_written_below_it()
+    {
+        // The endpoint only lets known items through; the choice's raw SQL upsert takes any text as a parameter all the same.
+        string[] hostile = ["'; DROP TABLE \"AspNetUsers\"; --", "' OR '1'='1", "x\\'; --"];
+        var (user, client) = await AccountAsync(_factory);
+        var (other, otherClient) = await AccountAsync(_factory);
+        Assert.Equal(HttpStatusCode.OK, (await SwitchAsync(otherClient, "notifications", false)).StatusCode);
+
+        foreach (var item in hostile)
+        {
+            Assert.Equal(HttpStatusCode.NotFound, (await SwitchAsync(client, Uri.EscapeDataString(item), true)).StatusCode);
+        }
+
+        using var scope = _factory.Services.CreateScope();
+        var preferences = scope.ServiceProvider.GetRequiredService<Runova.Website.Api.Accounts.EncryptionPreferences>();
+        foreach (var item in hostile)
+        {
+            await preferences.SetAsync(user.Id, item, false, TestContext.Current.CancellationToken);
+            await preferences.SetAsync(user.Id, item, true, TestContext.Current.CancellationToken);
+        }
+
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var rows = await db.UserEncryptionPreferences.AsNoTracking()
+            .Select(p => new { p.UserId, p.Item, p.Enabled }).ToListAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(
+            hostile.Order(StringComparer.Ordinal),
+            rows.Where(r => r.UserId == user.Id && r.Enabled).Select(r => r.Item).Order(StringComparer.Ordinal));
+        Assert.Equal(hostile.Length, rows.Count(r => r.UserId == user.Id));
+        Assert.Equal(("notifications", false), rows.Where(r => r.UserId == other.Id).Select(r => (r.Item, r.Enabled)).Single());
+        Assert.Equal(2, await db.Users.CountAsync(u => u.Id == user.Id || u.Id == other.Id, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
     public async Task A_sealed_event_needs_the_plan_and_each_phone_gets_its_own_copy()
     {
         var admin = await AdminAsync();

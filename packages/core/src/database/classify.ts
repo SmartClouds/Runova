@@ -33,8 +33,21 @@ interface ScannedStatement {
   code: string;
 }
 
-/** Splits one batch of SQL (or CQL) on semicolons that are outside quotes and comments. */
-function scanSql(engine: DbEngine, text: string): ScannedStatement[] {
+/** An E'...' string in PostgreSQL, where a backslash escapes the next character. */
+function isEString(engine: DbEngine, text: string, quote: number): boolean {
+  return (
+    engine === 'postgres' &&
+    /[eE]/.test(text[quote - 1] ?? '') &&
+    !/[A-Za-z0-9_$]/.test(text[quote - 2] ?? '')
+  );
+}
+
+/**
+ * Splits one batch of SQL (or CQL) on semicolons that are outside quotes and comments.
+ * `backslashStrings` reads every '...' string with backslash escapes, the way PostgreSQL does
+ * with standard_conforming_strings off.
+ */
+function scanSql(engine: DbEngine, text: string, backslashStrings = false): ScannedStatement[] {
   const backslashEscapes = engine === 'mysql' || engine === 'mariadb';
   const out: ScannedStatement[] = [];
   let start = 0;
@@ -69,10 +82,14 @@ function scanSql(engine: DbEngine, text: string): ScannedStatement[] {
     }
     if (ch === "'" || ch === '"' || ch === '`' || (ch === '[' && engine === 'mssql')) {
       const close = ch === '[' ? ']' : ch;
+      const escapes =
+        ch === "'"
+          ? backslashEscapes || backslashStrings || isEString(engine, text, i)
+          : ch === '"' && backslashEscapes;
       let j = i + 1;
       while (j < text.length) {
         const c = text[j];
-        if (c === '\\' && backslashEscapes && ch !== '`') {
+        if (c === '\\' && escapes) {
           j += 2;
           continue;
         }
@@ -112,7 +129,7 @@ function scanSql(engine: DbEngine, text: string): ScannedStatement[] {
   return out;
 }
 
-function scan(engine: DbEngine, text: string): ScannedStatement[] {
+function scan(engine: DbEngine, text: string, backslashStrings = false): ScannedStatement[] {
   if (engine === 'redis') {
     return text
       .split(/\r?\n/)
@@ -127,12 +144,33 @@ function scan(engine: DbEngine, text: string): ScannedStatement[] {
   if (engine === 'mssql') {
     return text.split(/^[ \t]*go[ \t]*$/im).flatMap((batch) => scanSql(engine, batch));
   }
-  return scanSql(engine, text);
+  return scanSql(engine, text, backslashStrings);
+}
+
+/**
+ * Every way the server might read the text. A PostgreSQL server with standard_conforming_strings
+ * off reads backslashes in plain strings as escapes, which moves where a string ends, so its text
+ * is read both ways and the more cautious reading wins.
+ */
+function scanEveryWay(engine: DbEngine, text: string): ScannedStatement[][] {
+  return engine === 'postgres'
+    ? [scan(engine, text), scan(engine, text, true)]
+    : [scan(engine, text)];
 }
 
 /** The statements in a query, as typed, for running one at a time. */
 export function splitStatements(engine: DbEngine, text: string): string[] {
   return scan(engine, text).map((statement) => statement.text);
+}
+
+/**
+ * The statements in a piece of SQL with comments removed and quoted text and names blanked, so
+ * only its structure is left: once for every way the server might read it (see scanEveryWay).
+ */
+export function maskedStatements(engine: DbEngine, text: string): string[][] {
+  return scanEveryWay(engine, text).map((statements) =>
+    statements.map((statement) => statement.code),
+  );
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -225,7 +263,46 @@ const ACCOUNT_OBJECTS = new Set(['user', 'role', 'login', 'system', 'group', 'se
 const WRITE_WORDS = /\b(insert|update|delete|merge|replace|upsert)\b/;
 /** Functions that change state or reach outside the database even inside a SELECT. */
 const RISKY_FUNCTIONS =
-  /\b(pg_terminate_backend|pg_cancel_backend|pg_reload_conf|pg_rotate_logfile|pg_read_file|pg_read_binary_file|pg_ls_dir|pg_stat_file|lo_import|lo_export|lo_unlink|set_config|nextval|setval|dblink\w*|pg_advisory\w*|pg_switch_wal|pg_create\w*|pg_drop\w*|pg_promote|load_file|sleep|benchmark|xp_\w+|sp_\w+)\s*\(/;
+  /\b(pg_terminate_backend|pg_cancel_backend|pg_reload_conf|pg_rotate_logfile|pg_read_file|pg_read_binary_file|pg_ls_dir|pg_stat_file|lo_import|lo_export|lo_unlink|set_config|nextval|setval|dblink\w*|pg_advisory\w*|pg_switch_wal|pg_create\w*|pg_drop\w*|pg_promote|load_file|sleep|benchmark|xp_\w+|sp_\w+|openquery|openrowset|opendatasource)\s*\(/;
+
+/**
+ * T-SQL needs no semicolon between statements, so "SELECT 1 COMMIT DROP TABLE t" is three of
+ * them. These reserved words start a statement that is more than a read, and since they are
+ * reserved they cannot be a bare column or table name, so seeing one in a read means another
+ * statement starts there.
+ */
+const TSQL_STATEMENT_WORDS = [
+  'alter',
+  'backup',
+  'begin',
+  'bulk',
+  'checkpoint',
+  'commit',
+  'create',
+  'dbcc',
+  'deny',
+  'drop',
+  'exec',
+  'execute',
+  'grant',
+  'kill',
+  'reconfigure',
+  'restore',
+  'revert',
+  'revoke',
+  'rollback',
+  'save',
+  'set',
+  'setuser',
+  'shutdown',
+  'truncate',
+  'updatetext',
+  'writetext',
+];
+/** Cuts T-SQL code before each of those words. A @variable or #table of that name is not one. */
+const TSQL_STATEMENT_START = new RegExp(
+  `(?<![a-z0-9_$@#])(?=(?:${TSQL_STATEMENT_WORDS.join('|')})(?![a-z0-9_$]))`,
+);
 
 function words(code: string): string[] {
   return code.match(/[a-z_][a-z0-9_$]*/g) ?? [];
@@ -620,10 +697,27 @@ function classifyRedis(statement: ScannedStatement): StatementClass {
 
 // ---------------------------------------------------------------------------------------------
 
+/** A T-SQL statement that reads as a read, checked for a second statement hiding after it. */
+function classifyTsql(statement: ScannedStatement): StatementClass | null {
+  const first = classifySql(statement);
+  if (first?.kind !== 'read') return first;
+  const pieces = statement.code.split(TSQL_STATEMENT_START).filter((piece) => piece.trim());
+  if (pieces.length < 2) return first;
+  return worst(
+    pieces
+      .map((code) => classifySql({ text: code, code }))
+      .filter((item): item is StatementClass => item !== null),
+  );
+}
+
 /** How serious a query is, taking the most serious of its statements. */
 export function classifyStatement(engine: DbEngine, text: string): StatementClass {
-  const statements = scan(engine, text);
-  if (engine === 'redis') return worst(statements.map(classifyRedis));
-  if (engine === 'mongodb') return worst(statements.map(classifyMongo));
-  return worst(statements.map(classifySql).filter((item): item is StatementClass => item !== null));
+  if (engine === 'redis') return worst(scan(engine, text).map(classifyRedis));
+  if (engine === 'mongodb') return worst(scan(engine, text).map(classifyMongo));
+  const classify = engine === 'mssql' ? classifyTsql : classifySql;
+  return worst(
+    scanEveryWay(engine, text).flatMap((statements) =>
+      statements.map(classify).filter((item): item is StatementClass => item !== null),
+    ),
+  );
 }

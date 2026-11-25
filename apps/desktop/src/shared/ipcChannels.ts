@@ -2309,6 +2309,8 @@ export const IPC = {
     readRows: 'database:readRows',
     // (DbQueryInput) -> DbQueryOutcome
     query: 'database:query',
+    // (DbRowEditsInput) -> DbRowEditsOutcome: the grid's edits, run with bound parameters
+    applyRowEdits: 'database:applyRowEdits',
     // (sessionId, queryId) -> boolean
     cancelQuery: 'database:cancelQuery',
     // (sessionId) -> DbSetting[]

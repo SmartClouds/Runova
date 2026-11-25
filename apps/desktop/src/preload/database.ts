@@ -21,6 +21,8 @@ import type {
   DbQueryInput,
   DbQueryOutcome,
   DbReadRowsInput,
+  DbRowEditsInput,
+  DbRowEditsOutcome,
   DbRowsPage,
   DbSchemaGraph,
   DbSetting,
@@ -67,6 +69,9 @@ export function createDatabase(subscribe: Subscribe) {
       ipcRenderer.invoke(IPC.database.readRows, input),
     query: (input: DbQueryInput): Promise<DbQueryOutcome> =>
       ipcRenderer.invoke(IPC.database.query, input),
+    /** The grid's edits to one table, in one transaction, every value a bound parameter. */
+    applyRowEdits: (input: DbRowEditsInput): Promise<DbRowEditsOutcome> =>
+      ipcRenderer.invoke(IPC.database.applyRowEdits, input),
     aiContext: (input: DbAiContextInput): Promise<DbAiContext> =>
       ipcRenderer.invoke(IPC.database.aiContext, input),
     /** The tables and foreign keys of one database (or schema), for the diagram. */

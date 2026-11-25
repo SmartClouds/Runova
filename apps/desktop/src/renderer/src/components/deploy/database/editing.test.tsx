@@ -98,6 +98,7 @@ function render(extra: Record<string, unknown> = {}) {
       'database.describe': table,
       'database.readRows': page,
       'database.query': { status: 'done', results: [] },
+      'database.applyRowEdits': { status: 'done', affectedRows: 2 },
       ...extra,
     },
   });
@@ -130,10 +131,16 @@ describe('row editing', () => {
       ].join('\n'),
     );
     await view.user.click(screen.getByRole('button', { name: 'Apply changes' }));
+    // Main gets the changes as data and binds every value itself; no SQL text crosses over.
     await waitFor(() =>
-      expect(view.bridge.$fn('database.query')).toHaveBeenCalledWith(
-        expect.objectContaining({ text: preview.textContent, confirmed: true, database: 'shop' }),
-      ),
+      expect(view.bridge.$fn('database.applyRowEdits')).toHaveBeenCalledWith({
+        sessionId: 'sess-1',
+        ref,
+        edits: [
+          { kind: 'update', key: { id: 1 }, values: { customer: 'Ada L.' } },
+          { kind: 'delete', key: { id: 2 } },
+        ],
+      }),
     );
     await waitFor(() => expect(screen.queryByText(/not saved yet/)).not.toBeInTheDocument());
   });
@@ -165,12 +172,7 @@ describe('row editing', () => {
 
   it('says nothing was changed when the transaction fails', async () => {
     const view = render({
-      'database.query': {
-        status: 'failed',
-        results: [],
-        error: 'violates not-null',
-        statementIndex: 1,
-      },
+      'database.applyRowEdits': { status: 'failed', error: 'violates not-null' },
     });
     useDatabaseWorkbenchStore
       .getState()

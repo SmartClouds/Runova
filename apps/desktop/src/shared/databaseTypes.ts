@@ -427,6 +427,26 @@ export interface DbRowsPage {
   keyColumns: string[];
 }
 
+/** One change from the grid. `key` holds the row's primary key values, column by column. */
+export type DbRowEdit =
+  | { kind: 'update'; key: Record<string, DbCell>; values: Record<string, DbCell> }
+  | { kind: 'insert'; values: Record<string, DbCell> }
+  | { kind: 'delete'; key: Record<string, DbCell> };
+
+/**
+ * The grid's pending changes to one table. Main writes the statements itself, with every value
+ * bound as a parameter, and runs them in one transaction.
+ */
+export interface DbRowEditsInput {
+  sessionId: string;
+  ref: DbObjectRef;
+  edits: DbRowEdit[];
+}
+
+export type DbRowEditsOutcome =
+  | { status: 'done'; affectedRows: number }
+  | { status: 'failed'; error: string };
+
 /** One server setting, for the Settings tab. */
 export interface DbSetting {
   name: string;

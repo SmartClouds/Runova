@@ -290,6 +290,96 @@ describe('registerDatabaseHandlers', () => {
     ).rejects.toThrow();
   });
 
+  it('passes hostile names, sorts and filters through as plain text for main to quote', async () => {
+    const { call, service } = harness();
+    const name = 'x"; DROP TABLE y; --';
+    await call(C.readRows, {
+      sessionId: SESSION,
+      ref: { database: 'd`b', schema: 's]x', name },
+      limit: 10,
+      offset: 0,
+      filter: "' OR '1'='1",
+      orderBy: { column: name, direction: 'asc' },
+    });
+    expect(service.readRows).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ref: { database: 'd`b', schema: 's]x', name },
+        orderBy: { column: name, direction: 'asc' },
+      }),
+    );
+    for (const direction of ['ASC; DROP TABLE y', 'asc ', 'ASC']) {
+      await expect(
+        call(C.readRows, {
+          sessionId: SESSION,
+          ref: { name: 't' },
+          limit: 1,
+          offset: 0,
+          orderBy: { column: 'a', direction },
+        }),
+      ).rejects.toThrow(/Sort up or down/);
+    }
+    for (const limit of ['10; DROP TABLE y', 1.5, 100_001, Number.NaN]) {
+      await expect(
+        call(C.readRows, { sessionId: SESSION, ref: { name: 't' }, limit, offset: 0 }),
+      ).rejects.toThrow(/whole number/);
+    }
+    await expect(
+      call(C.readRows, {
+        sessionId: SESSION,
+        ref: { name: { toString: () => 'x' } },
+        limit: 1,
+        offset: 0,
+      }),
+    ).rejects.toThrow(/name must be text/);
+  });
+
+  it('checks the grid edits: values as data, names as text, and nothing else', async () => {
+    const { call, service } = harness();
+    const hostile = "'; DROP TABLE users; --";
+    await call(C.applyRowEdits, {
+      sessionId: SESSION,
+      ref: { schema: 'public', name: 'users' },
+      edits: [
+        { kind: 'update', key: { id: 1 }, values: { name: hostile, meta: { a: [1, null] } } },
+        { kind: 'insert', values: { name: "' OR '1'='1", active: true } },
+        { kind: 'delete', key: { id: hostile } },
+      ],
+      extra: 'dropped',
+    });
+    expect(service.applyRowEdits).toHaveBeenCalledWith({
+      sessionId: SESSION,
+      ref: { schema: 'public', name: 'users' },
+      edits: [
+        { kind: 'update', key: { id: 1 }, values: { name: hostile, meta: { a: [1, null] } } },
+        { kind: 'insert', values: { name: "' OR '1'='1", active: true } },
+        { kind: 'delete', key: { id: hostile } },
+      ],
+    });
+
+    const edit = (one: unknown) =>
+      call(C.applyRowEdits, { sessionId: SESSION, ref: { name: 'users' }, edits: [one] });
+    await expect(edit({ kind: 'drop', key: { id: 1 } })).rejects.toThrow(/update, an insert/);
+    await expect(edit({ kind: 'delete', key: 'id = 1 OR 1=1' })).rejects.toThrow();
+    await expect(edit({ kind: 'insert', values: { name: () => 1 } })).rejects.toThrow(
+      /text, a number/,
+    );
+    await expect(
+      edit({ kind: 'insert', values: { n: Number.POSITIVE_INFINITY } }),
+    ).rejects.toThrow();
+    await expect(edit({ kind: 'insert', values: { at: new Date() } })).rejects.toThrow();
+    await expect(edit({ kind: 'insert', values: { '': 1 } })).rejects.toThrow(/column/);
+    await expect(
+      call(C.applyRowEdits, {
+        sessionId: SESSION,
+        ref: { name: 'users' },
+        edits: 'DELETE FROM users',
+      }),
+    ).rejects.toThrow(/list/);
+    await expect(
+      call(C.applyRowEdits, { sessionId: 'not a session!', ref: { name: 'users' }, edits: [] }),
+    ).rejects.toThrow();
+  });
+
   it('checks where a diagram looks', async () => {
     const { call, service } = harness();
     await call(C.schemaGraph, { sessionId: SESSION, database: 'shop', schema: 'sales', extra: 1 });

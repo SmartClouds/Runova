@@ -1,4 +1,5 @@
 import {
+  buildRowEditStatements,
   buildRowEdits,
   createUserStatements,
   type DbEngine,
@@ -6,6 +7,8 @@ import {
   maintenanceActions,
   maintenanceStatements,
   PRECISE_STATS_STATEMENT,
+  qualifiedName,
+  quoteIdentifier,
 } from '@runova/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { openDriver } from './index';
@@ -116,6 +119,17 @@ const CASES: SqlEngineCase[] = [
 ];
 
 const enabled = dockerAvailable();
+
+/** Values that would change a statement if they were pasted into its text. */
+const HOSTILE_VALUES = [
+  "'; DROP TABLE items; --",
+  "' OR '1'='1",
+  "\\'; DROP TABLE items; --",
+  "x' OR 1=1; --",
+  '100%_done',
+  "it''s",
+  'back\\slash',
+];
 
 function run(
   driver: DbDriver,
@@ -264,6 +278,68 @@ for (const engine of CASES) {
         driver,
         "UPDATE items SET name = 'apple' WHERE id = 1; DELETE FROM items WHERE name = 'kiwi'",
       );
+    });
+
+    it('treats hostile names and values in its own SQL as names and data', async () => {
+      const name =
+        engine.engine === 'postgres' ? 'x"; DROP TABLE items; --' : 'x`; DROP TABLE items; --';
+      const column = 'c`"\'; DROP TABLE items; --';
+      const hostileRef = { ...engine.ref, name };
+      const created = await run(
+        driver,
+        `CREATE TABLE ${qualifiedName(engine.engine, hostileRef)} (id int PRIMARY KEY, ${quoteIdentifier(engine.engine, column)} varchar(200))`,
+      );
+      expect(created.error).toBeUndefined();
+      try {
+        const table = await driver.describe(hostileRef);
+        expect(table.columns.map((one) => one.name)).toEqual(['id', column]);
+        expect(table.columns[0]?.primaryKey).toBe(true);
+
+        const values = HOSTILE_VALUES;
+        const inserts = buildRowEditStatements(
+          engine.engine,
+          table.ref,
+          table.columns,
+          values.map((value, index) => ({
+            kind: 'insert' as const,
+            values: { id: index + 1, [column]: value },
+          })),
+        );
+        expect(await driver.applyEdits?.(inserts, engine.database)).toEqual({
+          affectedRows: values.length,
+        });
+        // A key that would match every row if it were pasted in matches the one row holding it.
+        const update = buildRowEditStatements(engine.engine, table.ref, table.columns, [
+          { kind: 'update', key: { [column]: "' OR '1'='1" }, values: { [column]: 'matched' } },
+          { kind: 'delete', key: { [column]: "nothing' OR '1'='1" } },
+        ]);
+        expect(await driver.applyEdits?.(update, engine.database)).toEqual({ affectedRows: 1 });
+
+        const page = await driver.readRows({
+          ref: hostileRef,
+          limit: 50,
+          offset: 0,
+          orderBy: { column, direction: 'asc' },
+        });
+        expect(page.keyColumns).toEqual(['id']);
+        const stored = values.map((value) => (value === "' OR '1'='1" ? 'matched' : value));
+        expect(page.result.rows.map((row) => row[1]).sort()).toEqual([...stored].sort());
+        await expect(
+          driver.readRows({
+            ref: hostileRef,
+            limit: 50,
+            offset: 0,
+            orderBy: { column: `${column} DESC; DROP TABLE items; --`, direction: 'asc' },
+          }),
+        ).rejects.toThrow(/no column/);
+        await expect(
+          driver.readRows({ ref: hostileRef, limit: 50, offset: 0, filter: '1=1) OR (1=1' }),
+        ).rejects.toThrow(/one condition/);
+      } finally {
+        await run(driver, `DROP TABLE ${qualifiedName(engine.engine, hostileRef)}`);
+      }
+      const items = await run(driver, 'SELECT name FROM items ORDER BY id');
+      expect(items.results[0]?.rows).toEqual([['apple'], ['pear'], ['plum']]);
     });
 
     it('lists the server settings and the users, and creates a user with read access', async () => {

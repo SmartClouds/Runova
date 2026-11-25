@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import type { StoredEnvFileVersion } from '../shared/apiTypes';
+import { ALWAYS_TRUE, dropTable, hostileSqlValues } from '../test/main/hostileSqlInput';
 import { useTempUserData } from '../test/main/ipcHarness';
 import { closeSqliteHandlesAfterEach } from '../test/main/sqliteHandles';
 
@@ -152,5 +153,69 @@ describe('backup', () => {
     db.replaceAll([incoming]);
     expect(db.exportAll()).toEqual([incoming]);
     expect(db.list('f1')).toEqual([]);
+  });
+});
+
+describe('hostile input is data, never SQL', () => {
+  const hostile = hostileSqlValues('env_file_versions');
+
+  it('stores hostile ids and names verbatim and finds each only through its own file', async () => {
+    const db = await loadDb();
+    const bystander = db.add(
+      version({ fileId: 'plain', projectId: 'plain', environmentId: 'plain' }),
+    );
+    const added = hostile.map((text) =>
+      db.add(version({ projectId: text, environmentId: text, fileId: text, fileName: text })),
+    );
+
+    for (const [index, text] of hostile.entries()) {
+      expect(db.list(text).map((one) => one.id)).toEqual([added[index]!.id]);
+      expect(db.get(text, added[index]!.id)).toEqual(added[index]);
+    }
+    expect(db.get(ALWAYS_TRUE, bystander.id)).toBeNull();
+    expect(db.get('plain', ALWAYS_TRUE)).toBeNull();
+    expect(db.list('plain')).toHaveLength(1);
+    expect(db.exportAll()).toHaveLength(hostile.length + 1);
+  });
+
+  it('counts only the files it literally names, however their ids look', async () => {
+    const db = await loadDb();
+    db.add(version({ fileId: 'plain' }));
+    db.add(version({ fileId: ALWAYS_TRUE }));
+    db.add(version({ fileId: ALWAYS_TRUE }));
+
+    const counts = db.countByFile([ALWAYS_TRUE, dropTable('env_file_versions'), '") OR 1=1 --']);
+
+    expect([...counts]).toEqual([[ALWAYS_TRUE, 2]]);
+    expect(db.exportAll()).toHaveLength(3);
+  });
+
+  it('removes only what the hostile id names and keeps projects listed by hostile ids', async () => {
+    const db = await loadDb();
+    const plain = db.add(version({ fileId: 'plain', environmentId: 'plain', projectId: 'plain' }));
+    const odd = db.add(version({ fileId: 'odd', environmentId: 'odd', projectId: ALWAYS_TRUE }));
+
+    for (const text of hostile.filter((one) => one !== ALWAYS_TRUE)) {
+      db.removeForFile(text);
+      db.removeForEnvironment(text);
+    }
+    expect(db.exportAll()).toHaveLength(2);
+
+    expect(db.retainProjects([ALWAYS_TRUE, dropTable('env_file_versions')])).toBe(1);
+    expect(db.exportAll()).toEqual([odd]);
+    expect(db.get('plain', plain.id)).toBeNull();
+  });
+
+  it('restores a backup full of hostile text without running any of it', async () => {
+    const db = await loadDb();
+    const incoming: StoredEnvFileVersion[] = hostile.map((text, index) => ({
+      ...version({ projectId: text, environmentId: text, fileId: text, fileName: text }),
+      id: text,
+      replacedAt: 10 + index,
+    }));
+
+    db.replaceAll(incoming);
+
+    expect(db.exportAll()).toEqual([...incoming].reverse());
   });
 });

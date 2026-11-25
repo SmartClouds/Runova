@@ -305,6 +305,60 @@ public sealed class SignedRequestTests(PostgresFixture postgres) : IAsyncLifetim
     }
 
     [Fact]
+    public async Task An_idempotency_key_that_reads_as_sql_is_kept_as_written_and_matches_only_itself()
+    {
+        // The key may be any visible ASCII, quotes and semicolons included, and goes into raw SQL as a parameter.
+        const string Drop = "';DROP/**/TABLE/**/\"IdempotencyRecords\";--";
+        const string Always = "'OR'1'='1";
+        const string Escaped = "\\';SELECT/**/pg_sleep(5);--";
+        var (keyId, secret) = await TestApiClients.AddAsync(_factory.Services);
+        var http = TestApiClients.Http(_factory, keyId, secret);
+        var body = NewsWriteTests.Body("sql-key-first").ToJsonString();
+
+        var first = await PostAsync(http, body, Drop);
+        var always = await PostAsync(http, NewsWriteTests.Body("sql-key-second").ToJsonString(), Always);
+        var escaped = await PostAsync(http, NewsWriteTests.Body("sql-key-third").ToJsonString(), Escaped);
+        var again = await PostAsync(http, body, Drop);
+
+        Assert.Equal(HttpStatusCode.Created, first.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, always.StatusCode);
+        Assert.False(always.Headers.Contains("Idempotent-Replayed"));
+        Assert.Equal(HttpStatusCode.Created, escaped.StatusCode);
+        Assert.False(escaped.Headers.Contains("Idempotent-Replayed"));
+        Assert.Equal("true", again.Headers.GetValues("Idempotent-Replayed").Single());
+        Assert.Equal(first.Headers.Location, again.Headers.Location);
+        Assert.Equal(3, await NewsCountAsync());
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var keys = await scope.ServiceProvider.GetRequiredService<AppDbContext>().IdempotencyRecords.AsNoTracking()
+            .Select(r => r.Key).ToListAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(new[] { Drop, Always, Escaped }.Order(StringComparer.Ordinal), keys.Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_nonce_is_stored_as_written_and_one_that_reads_as_sql_is_refused_before_the_database()
+    {
+        var (keyId, secret) = await TestApiClients.AddAsync(_factory.Services);
+        var http = TestApiClients.Raw(_factory);
+        // Dashes and underscores are allowed in a nonce: a comment marker in one is still just text.
+        const string Allowed = "--_DROP_TABLE_SignatureNonces_--";
+        using var allowed = TestApiClients.Signed(keyId, secret, HttpMethod.Post, News, NewsWriteTests.Body("nonce-allowed").ToJsonString(), nonce: Allowed);
+        using var quoted = TestApiClients.Signed(
+            keyId, secret, HttpMethod.Post, News, NewsWriteTests.Body("nonce-quoted").ToJsonString(), nonce: "';DELETE FROM \"SignatureNonces\";--");
+        using var always = TestApiClients.Signed(
+            keyId, secret, HttpMethod.Post, News, NewsWriteTests.Body("nonce-always").ToJsonString(), nonce: "x' OR '1'='1' OR 'x'='xxxxxx");
+
+        Assert.Equal(HttpStatusCode.Created, (await http.SendAsync(allowed, TestContext.Current.CancellationToken)).StatusCode);
+        await AssertUnauthenticatedAsync(await http.SendAsync(quoted, TestContext.Current.CancellationToken), News);
+        await AssertUnauthenticatedAsync(await http.SendAsync(always, TestContext.Current.CancellationToken), News);
+
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var nonce = await db.SignatureNonces.AsNoTracking().SingleAsync(TestContext.Current.CancellationToken);
+        Assert.Equal((keyId, Allowed), (nonce.KeyId, nonce.Nonce));
+        Assert.Equal(["nonce-allowed"], await db.NewsItems.Select(i => i.Slug).ToListAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
     public async Task An_idempotency_key_works_for_a_staff_session_and_keeps_a_refusal_too()
     {
         var editor = await TestUsers.SignedInClientAsync(_factory, await TestUsers.CreateAsync(_factory.Services, Roles.Editor));

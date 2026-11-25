@@ -5,12 +5,15 @@ import type {
   DatabaseSaveInput,
   DatabaseSignInInput,
   DatabaseTarget,
+  DbCell,
   DbHealthInput,
   DbListObjectsInput,
   DbObjectKind,
   DbObjectRef,
   DbQueryInput,
   DbReadRowsInput,
+  DbRowEdit,
+  DbRowEditsInput,
   DbScopeInput,
 } from '../../shared/databaseTypes';
 import { IPC } from '../../shared/ipcChannels';
@@ -50,6 +53,7 @@ export interface DatabaseHandlerDeps {
     | 'listObjects'
     | 'describe'
     | 'readRows'
+    | 'applyRowEdits'
     | 'query'
     | 'cancelQuery'
     | 'settings'
@@ -294,6 +298,74 @@ function queryInput(value: unknown): DbQueryInput {
   return out;
 }
 
+const MAX_EDITS = 10_000;
+const MAX_EDIT_COLUMNS = 1_000;
+/** A cell can be a whole JSON document, but not an unbounded one. */
+const MAX_CELL_TEXT = 4 * 1024 * 1024;
+const MAX_CELL_DEPTH = 32;
+
+/** A changed value: text, a number, true or false, NULL, or JSON made of those. */
+function cell(value: unknown, depth = 0): DbCell {
+  if (value === null || typeof value === 'boolean') return value;
+  if (typeof value === 'string') {
+    if (value.length > MAX_CELL_TEXT) throw new Error('A changed value is too long.');
+    return value;
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (depth < MAX_CELL_DEPTH && Array.isArray(value))
+    return value.map((item) => cell(item, depth + 1));
+  if (
+    depth < MAX_CELL_DEPTH &&
+    typeof value === 'object' &&
+    Object.getPrototypeOf(value) === Object.prototype
+  ) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, cell(item, depth + 1)]),
+    );
+  }
+  throw new Error('A changed value must be text, a number, true or false, or NULL.');
+}
+
+/** Column name to value, for one edit's key or values. Names are checked again in main. */
+function cells(value: unknown, what: string): Record<string, DbCell> {
+  const entries = Object.entries(object(value, what));
+  if (entries.length > MAX_EDIT_COLUMNS) throw new Error(`Too many columns in ${what}.`);
+  // fromEntries makes each name an own property, even one called __proto__.
+  return Object.fromEntries(
+    entries.map(([name, item]) => [text(name, MAX_NAME, 'column'), cell(item)]),
+  );
+}
+
+function rowEdit(value: unknown): DbRowEdit {
+  const input = object(value, 'a change');
+  switch (input.kind) {
+    case 'update':
+      return {
+        kind: 'update',
+        key: cells(input.key, 'the row key'),
+        values: cells(input.values, 'the new values'),
+      };
+    case 'insert':
+      return { kind: 'insert', values: cells(input.values, 'the new row') };
+    case 'delete':
+      return { kind: 'delete', key: cells(input.key, 'the row key') };
+    default:
+      throw new Error('A change is an update, an insert or a delete.');
+  }
+}
+
+function rowEditsInput(value: unknown): DbRowEditsInput {
+  const input = object(value, 'the changes');
+  if (!Array.isArray(input.edits) || input.edits.length > MAX_EDITS) {
+    throw new Error(`The changes must be a list of at most ${MAX_EDITS}.`);
+  }
+  return {
+    sessionId: id(input.sessionId, 'connection'),
+    ref: ref(input.ref),
+    edits: input.edits.map(rowEdit),
+  };
+}
+
 function nullableName(value: unknown, label: string): string | null {
   return value === undefined || value === null ? null : text(value, MAX_NAME, label);
 }
@@ -357,6 +429,7 @@ export function registerDatabaseHandlers({
   );
   handle(IPC.database.readRows, (value) => service.readRows(rowsInput(value)));
   handle(IPC.database.query, (value) => service.query(queryInput(value)));
+  handle(IPC.database.applyRowEdits, (value) => service.applyRowEdits(rowEditsInput(value)));
   if (backups) {
     const connection = (value: unknown) => id(value, 'saved connection');
     handle(IPC.database.listBackups, (value) => backups.list(connection(value)));

@@ -87,6 +87,28 @@ public sealed class PostWriteTests(PostgresFixture postgres) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task New_tag_names_that_read_as_sql_are_stored_and_read_back_as_written()
+    {
+        // New tags go in through raw SQL (unnest of two parameter arrays), so this is the path to prove.
+        string[] hostile = ["'); DROP TABLE \"Tags\"; --", "' OR '1'='1", "O'Brien \\ \"quoted\""];
+        var editor = await EditorAsync();
+        var (plain, _) = await CreateAsync(editor, Body("plain-tags", tags: ["Docker"]));
+
+        var created = await ApiClient.ReadJsonAsync(await editor.SendAsync(HttpMethod.Post, Posts, Body("sql-looking-tags", tags: hostile)), HttpStatusCode.Created);
+
+        Assert.Equal(
+            hostile.Order(StringComparer.Ordinal),
+            created.GetProperty("tags").EnumerateArray().Select(t => t.GetProperty("name").GetString()).Order(StringComparer.Ordinal));
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var tags = await db.Tags.AsNoTracking().Select(t => t.Name).ToListAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(hostile.Append("Docker").Order(StringComparer.Ordinal), tags.Order(StringComparer.Ordinal));
+        var plainTags = await db.Posts.AsNoTracking().Where(p => p.Id == plain).SelectMany(p => p.Tags.Select(t => t.Name)).ToListAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(["Docker"], plainTags);
+        Assert.Equal(2, await db.Posts.CountAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
     public async Task Put_replaces_patch_merges_and_delete_archives()
     {
         var editor = await EditorAsync();

@@ -4,6 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 import type { SkillAuditFinding } from '@runova/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SkillAuditRecord } from '../shared/apiTypes';
+import { ALWAYS_TRUE, hostileSqlValues } from '../test/main/hostileSqlInput';
 import { useTempUserData } from '../test/main/ipcHarness';
 
 /**
@@ -280,5 +281,58 @@ describe('backup export and import', () => {
 
     // The column is NOT NULL, so a missing list has to become empty JSON rather than a crash.
     expect(db.exportAll()[0].findings).toEqual([]);
+  });
+});
+
+describe('hostile input is data, never SQL', () => {
+  const hostile = hostileSqlValues('skill_audits');
+
+  it('stores hostile text verbatim and finds each skill only by its own id', async () => {
+    const db = await loadDb();
+    const bystander = db.add(audit({ skillId: 'plain' }));
+    const added = hostile.map((text) =>
+      db.add(
+        audit({
+          skillId: text,
+          skillName: text,
+          sourceLabel: text,
+          projectId: text,
+          cliName: text,
+          aiSummary: text,
+          aiError: text,
+          findings: [finding({ title: text, excerpt: text, file: text })],
+        }),
+      ),
+    );
+
+    for (const [index, text] of hostile.entries()) {
+      expect(db.list({ skillId: text })).toEqual([added[index]]);
+      expect(db.get(added[index]!.id)).toEqual(added[index]);
+    }
+    expect(db.get(ALWAYS_TRUE)).toBeNull();
+    expect(db.list({ skillId: 'plain' })).toEqual([bystander]);
+    expect(db.latestPerSkill()).toHaveLength(hostile.length + 1);
+  });
+
+  it('removes nothing for an id that only looks like it could match every row', async () => {
+    const db = await loadDb();
+    const kept = db.add(audit());
+
+    for (const text of hostile) db.remove(text);
+
+    expect(db.exportAll()).toEqual([kept]);
+  });
+
+  it('restores a backup full of hostile text without running any of it', async () => {
+    const db = await loadDb();
+    const records: SkillAuditRecord[] = hostile.map((text, index) => ({
+      ...audit({ skillId: text, skillName: text, sourceLabel: text, projectId: text }),
+      id: text,
+      createdAt: `2026-02-02T00:00:0${index}.000Z`,
+    }));
+
+    db.importAll(records);
+
+    expect(db.exportAll()).toEqual([...records].reverse());
   });
 });

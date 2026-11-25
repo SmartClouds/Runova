@@ -1,4 +1,4 @@
-import { splitStatements } from './classify.js';
+import { maskedStatements, splitStatements } from './classify.js';
 import type { DbEngine } from './types.js';
 
 /** Where a table lives. Engines ignore the parts they do not have. */
@@ -30,9 +30,18 @@ export function quoteIdentifier(engine: DbEngine, name: string): string {
   }
 }
 
+/**
+ * A string as a literal, for the few statements that cannot take a parameter (a password in
+ * CREATE ROLE, a setting) and for previews. Values in queries are bound as parameters instead.
+ *
+ * MySQL reads backslashes in strings as escapes, so they are doubled. PostgreSQL does too when
+ * standard_conforming_strings is off, where 'a\' would end the string early, so text with a
+ * backslash is written as E'...' with the backslashes doubled, which reads the same either way.
+ */
 export function quoteLiteral(engine: DbEngine, value: string): string {
   let text = value.replaceAll("'", "''");
   if (engine === 'mysql' || engine === 'mariadb') text = text.replaceAll('\\', '\\\\');
+  if (engine === 'postgres' && text.includes('\\')) return `E'${text.replaceAll('\\', '\\\\')}'`;
   return engine === 'mssql' ? `N'${text}'` : `'${text}'`;
 }
 
@@ -54,17 +63,43 @@ function wholeNumber(value: number, label: string, max: number): number {
   return value;
 }
 
-/** The SELECT for one page of the data grid. */
+const ONE_CONDITION = "The filter must be one condition, like: total > 10 AND status = 'paid'.";
+
+/**
+ * The filter is a condition the user typed, so it is SQL on purpose, but it has to stay a
+ * condition: one statement, and with its brackets balanced so it cannot close the WHERE (...)
+ * it sits in and carry on with more of its own. Brackets inside strings, names and comments do
+ * not count.
+ */
+function checkFilter(engine: DbEngine, filter: string): void {
+  for (const statements of maskedStatements(engine, filter)) {
+    if (statements.length > 1) throw new Error(ONE_CONDITION);
+    let depth = 0;
+    for (const ch of statements[0] ?? '') {
+      if (ch === '(') depth++;
+      if (ch === ')') depth--;
+      if (depth < 0) throw new Error(`${ONE_CONDITION} It closes a bracket it did not open.`);
+    }
+    if (depth !== 0) throw new Error(`${ONE_CONDITION} A bracket in it is never closed.`);
+  }
+}
+
+/**
+ * The SELECT for one page of the data grid. `columns`, when given, are the table's columns, and
+ * the sort has to name one of them.
+ */
 export function buildReadRows(
   engine: DbEngine,
   ref: DbObjectRef,
   options: ReadRowsOptions,
+  columns?: readonly string[],
 ): string {
   const limit = wholeNumber(options.limit, 'page size', MAX_PAGE);
   const offset = wholeNumber(options.offset, 'offset', Number.MAX_SAFE_INTEGER);
   const filter = options.filter?.trim();
-  if (filter && splitStatements(engine, filter).length > 1) {
-    throw new Error("The filter must be one condition, like: total > 10 AND status = 'paid'.");
+  if (filter) checkFilter(engine, filter);
+  if (options.orderBy && columns && !columns.includes(options.orderBy.column)) {
+    throw new Error(`There is no column ${options.orderBy.column} to sort by.`);
   }
   const table = qualifiedName(engine, ref);
   const order = options.orderBy

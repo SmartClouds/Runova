@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ALWAYS_TRUE, dropTable } from '../../test/main/hostileSqlInput';
 import { clearHistorySources, historySource } from './historySources';
 import {
   clearHistoryCaches,
@@ -882,6 +883,102 @@ describe('collectHistory for OpenCode', () => {
       expect(sessions[0]).toMatchObject({ cwd: 'E:/App', model: 'm-new' });
     } finally {
       await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('treats session ids read from the store as data, in both layouts', async () => {
+    const { DatabaseSync } = await import('node:sqlite');
+    const ids = ['ses_plain', ALWAYS_TRUE, dropTable('session_message'), dropTable('part')];
+    for (const layout of ['v2', 'legacy'] as const) {
+      const dir = await mkdtemp(join(tmpdir(), 'opencode-'));
+      try {
+        const storeDir = join(dir, '.local', 'share', 'opencode');
+        await mkdir(storeDir, { recursive: true });
+        const dbPath = join(storeDir, 'opencode.db');
+        const db = new DatabaseSync(dbPath);
+        try {
+          const sessionColumns =
+            '(id TEXT, directory TEXT, title TEXT, model TEXT, time_created INTEGER, time_updated INTEGER)';
+          if (layout === 'v2') {
+            db.exec(`CREATE TABLE session_v2 ${sessionColumns}`);
+            db.exec(
+              'CREATE TABLE session_message (id TEXT, session_id TEXT, type TEXT, seq INTEGER, data TEXT)',
+            );
+          } else {
+            db.exec(`CREATE TABLE session ${sessionColumns}`);
+            db.exec('CREATE TABLE message (id TEXT, session_id TEXT, data TEXT)');
+            db.exec(
+              'CREATE TABLE part (id TEXT, message_id TEXT, session_id TEXT, time_created INTEGER, data TEXT)',
+            );
+          }
+          const table = layout === 'v2' ? 'session_v2' : 'session';
+          for (const [index, id] of ids.entries()) {
+            db.prepare(`INSERT INTO ${table} VALUES (?, ?, ?, ?, ?, ?)`).run(
+              id,
+              'E:/App',
+              id,
+              null,
+              index,
+              100 - index,
+            );
+            for (const [step, which] of ['first', 'last'].entries()) {
+              const text = `${which} of session ${index}`;
+              const order = index * 10 + step;
+              if (layout === 'v2') {
+                db.prepare('INSERT INTO session_message VALUES (?, ?, ?, ?, ?)').run(
+                  `m${order}`,
+                  id,
+                  'user',
+                  order,
+                  JSON.stringify({ text }),
+                );
+              } else {
+                db.prepare('INSERT INTO message VALUES (?, ?, ?)').run(
+                  `msg${order}`,
+                  id,
+                  JSON.stringify({ role: 'user' }),
+                );
+                db.prepare('INSERT INTO part VALUES (?, ?, ?, ?, ?)').run(
+                  `prt${order}`,
+                  `msg${order}`,
+                  id,
+                  order,
+                  JSON.stringify({ type: 'text', text }),
+                );
+              }
+            }
+          }
+        } finally {
+          db.close();
+        }
+
+        const fs: HistoryFs = {
+          ...localHistoryFs,
+          scope: `opencode-hostile-${layout}`,
+          home: async () => dir,
+        };
+        const sessions = await collectHistory(fs, { folder: 'E:/App' });
+
+        // Each session gets its own prompt, and the ids come back exactly as stored. An id pasted
+        // into the SQL would have matched every message, or dropped the table it names.
+        expect(sessions.map((s) => [s.id, s.title, s.firstPrompt, s.lastPrompt])).toEqual(
+          ids.map((id, index) => [id, id, `first of session ${index}`, `last of session ${index}`]),
+        );
+        const after = new DatabaseSync(dbPath);
+        try {
+          const tables = after
+            .prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
+            .all()
+            .map((row) => row.name);
+          expect(tables).toEqual(
+            layout === 'v2' ? ['session_message', 'session_v2'] : ['message', 'part', 'session'],
+          );
+        } finally {
+          after.close();
+        }
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
     }
   });
 

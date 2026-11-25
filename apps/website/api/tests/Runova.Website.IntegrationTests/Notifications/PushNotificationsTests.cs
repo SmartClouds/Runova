@@ -362,6 +362,62 @@ public sealed class PushNotificationsTests(PostgresFixture postgres) : IAsyncLif
     }
 
     [Fact]
+    public async Task A_push_token_that_reads_as_sql_is_refused_and_one_that_passes_is_stored_as_written()
+    {
+        // The device row is upserted with raw SQL. The token's rules let dashes, colons and dots through, never a quote.
+        const string Allowed = "--DROP:TABLE.PushDevices_--";
+        var (_, browser) = await AccountAsync(_factory);
+        var phone = await TestPhones.SignInAsync(_factory, browser);
+        var (_, otherBrowser) = await AccountAsync(_factory);
+        var otherPhone = await TestPhones.SignInAsync(_factory, otherBrowser);
+        await RegisterAsync(otherPhone, "fcm-token-other");
+
+        await RegisterAsync(phone, Allowed);
+        foreach (var token in new[] { "'; DROP TABLE \"PushDevices\"; --", "' OR '1'='1", "x\\';--" })
+        {
+            var refused = await phone.Client.PutAsJsonAsync("/api/v1/accounts/me/push-devices/current", new { platform = "android", pushToken = token }, TestContext.Current.CancellationToken);
+            Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+        }
+
+        using var scope = _factory.Services.CreateScope();
+        var devices = await scope.ServiceProvider.GetRequiredService<AppDbContext>().PushDevices.AsNoTracking()
+            .OrderBy(d => d.Id).Select(d => new { d.SessionId, d.PushToken }).ToListAsync(TestContext.Current.CancellationToken);
+        Assert.Equal([(otherPhone.SessionId, "fcm-token-other"), (phone.SessionId, Allowed)], devices.Select(d => (d.SessionId, d.PushToken)));
+    }
+
+    [Fact]
+    public async Task A_category_that_reads_as_sql_is_refused_at_the_door_and_kept_as_written_below_it()
+    {
+        // The endpoint only lets known categories through; the store's raw SQL takes any text as a parameter all the same.
+        string[] hostile = ["'; DROP TABLE \"AspNetUsers\"; --", "' OR '1'='1", "x\\'; --"];
+        var (user, browser) = await AccountAsync(_factory);
+        var (other, otherBrowser) = await AccountAsync(_factory);
+        Assert.Equal(HttpStatusCode.OK, (await otherBrowser.SendAsync(HttpMethod.Put, "/api/v1/accounts/me/notification-preferences/pipelines", new { enabled = false })).StatusCode);
+
+        foreach (var category in hostile)
+        {
+            var refused = await browser.SendAsync(HttpMethod.Put, $"/api/v1/accounts/me/notification-preferences/{Uri.EscapeDataString(category)}", new { enabled = false });
+            Assert.Equal(HttpStatusCode.NotFound, refused.StatusCode);
+        }
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var store = scope.ServiceProvider.GetRequiredService<NotificationPreferenceStore>();
+            foreach (var category in hostile)
+            {
+                await store.SetAsync(user.Id, category, true, TestContext.Current.CancellationToken);
+                await store.SetAsync(user.Id, category, false, TestContext.Current.CancellationToken);
+            }
+
+            Assert.Equal(hostile.Order(StringComparer.Ordinal), (await store.OffForAsync(user.Id, TestContext.Current.CancellationToken)).Order(StringComparer.Ordinal));
+            Assert.Equal(["pipelines"], await store.OffForAsync(other.Id, TestContext.Current.CancellationToken));
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(hostile.Length + 1, await db.NotificationPreferences.CountAsync(TestContext.Current.CancellationToken));
+            Assert.Equal(2, await db.Users.CountAsync(u => u.Id == user.Id || u.Id == other.Id, TestContext.Current.CancellationToken));
+        }
+    }
+
+    [Fact]
     public async Task A_token_registered_again_without_a_tag_drops_the_old_tag()
     {
         var (_, browser) = await AccountAsync(_factory);

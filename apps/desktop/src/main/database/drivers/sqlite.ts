@@ -1,5 +1,11 @@
 import { existsSync } from 'node:fs';
-import { buildReadRows, limitStatement, qualifiedName, splitStatements } from '@runova/core';
+import {
+  buildReadRows,
+  limitStatement,
+  qualifiedName,
+  type SqlParam,
+  splitStatements,
+} from '@runova/core';
 import Database from 'better-sqlite3';
 import type {
   DbColumn,
@@ -328,7 +334,12 @@ export async function openSqlite(options: DriverConnectOptions): Promise<DbDrive
     async readRows(input: Omit<DbReadRowsInput, 'sessionId'>): Promise<DbRowsPage> {
       const table = await describe(input.ref);
       const ref = { name: input.ref.name };
-      const sql = buildReadRows('sqlite', ref, input);
+      const sql = buildReadRows(
+        'sqlite',
+        ref,
+        input,
+        table.columns.map((column) => column.name),
+      );
       const started = Date.now();
       db.pragma('query_only = ON');
       try {
@@ -405,6 +416,23 @@ export async function openSqlite(options: DriverConnectOptions): Promise<DbDrive
       } finally {
         if (run.readOnly) db.pragma('query_only = OFF');
       }
+    },
+
+    async applyEdits(statements) {
+      let affectedRows = 0;
+      // SQLite has no boolean, so true and false are bound as 1 and 0.
+      const bind = (params: readonly SqlParam[]) =>
+        params.map((param) => (typeof param === 'boolean' ? Number(param) : param));
+      try {
+        db.transaction(() => {
+          for (const statement of statements) {
+            affectedRows += prepare(statement.text).run(...bind(statement.params)).changes;
+          }
+        })();
+      } catch (error) {
+        throw new DriverError(describeError(error));
+      }
+      return { affectedRows };
     },
 
     async settings(): Promise<DbSetting[]> {

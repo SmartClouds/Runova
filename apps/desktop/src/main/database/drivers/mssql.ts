@@ -1,4 +1,4 @@
-import { buildReadRows, qualifiedName, quoteIdentifier, quoteLiteral } from '@runova/core';
+import { buildReadRows, qualifiedName, quoteIdentifier, type SqlParam } from '@runova/core';
 import sql from 'mssql';
 import type {
   DbColumn,
@@ -35,6 +35,21 @@ export function splitBatches(text: string): string[] {
     .split(/^[ \t]*go[ \t]*(?:\d+)?[ \t]*$/im)
     .map((batch) => batch.trim())
     .filter(Boolean);
+}
+
+export type MssqlParams = Readonly<Record<string, SqlParam>>;
+
+/**
+ * Binds one value to `@name`: text as nvarchar(max), true and false as bit, and a number as its
+ * text, which SQL Server converts to the column's type, so a bigint or decimal keeps every digit.
+ */
+export function bindParam(
+  request: Pick<sql.Request, 'input'>,
+  name: string,
+  value: SqlParam,
+): void {
+  if (typeof value === 'boolean') request.input(name, sql.Bit, value);
+  else request.input(name, sql.NVarChar(sql.MAX), value === null ? null : String(value));
 }
 
 /** A read wrapped so nothing it does is kept, and at most `rows` rows come back. */
@@ -113,17 +128,22 @@ export async function openMssql(options: DriverConnectOptions): Promise<DbDriver
     throw new DriverError(describeError(error), code === 'ELOGIN');
   }
   let current = options.database || 'master';
+  // A database name cannot be a parameter, so it is a quoted identifier; every value is bound.
   const db = (name?: string | null) => quoteIdentifier('mssql', name || current);
-  const rowsOf = async <T>(text: string): Promise<T[]> =>
-    (await pool.request().query<T>(text)).recordset;
+  const rowsOf = async <T>(text: string, params: MssqlParams = {}): Promise<T[]> => {
+    const request = pool.request();
+    for (const [name, value] of Object.entries(params)) bindParam(request, name, value);
+    return (await request.query<T>(text)).recordset;
+  };
 
   const describe = async (ref: DbObjectRef): Promise<DbTableDescription> => {
     const database = ref.database ?? current;
     const schema = ref.schema ?? 'dbo';
-    const where = `TABLE_SCHEMA = ${quoteLiteral('mssql', schema)} AND TABLE_NAME = ${quoteLiteral('mssql', ref.name)}`;
+    const params = { database, schema, name: ref.name };
     const table = (
       await rowsOf<{ TABLE_TYPE: string }>(
-        `SELECT TABLE_TYPE FROM ${db(database)}.INFORMATION_SCHEMA.TABLES WHERE ${where}`,
+        `SELECT TABLE_TYPE FROM ${db(database)}.INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = @schema AND TABLE_NAME = @name`,
+        params,
       )
     )[0];
     if (!table) throw new DriverError(`There is no table ${schema}.${ref.name}.`);
@@ -137,18 +157,19 @@ export async function openMssql(options: DriverConnectOptions): Promise<DbDriver
       is_pk: number;
     }>(
       `SELECT c.COLUMN_NAME, c.DATA_TYPE, c.CHARACTER_MAXIMUM_LENGTH, c.IS_NULLABLE, c.COLUMN_DEFAULT,
-              COLUMNPROPERTY(OBJECT_ID(${quoteLiteral('mssql', `${database}.${schema}.${ref.name}`)}), c.COLUMN_NAME, 'IsIdentity') AS is_identity,
+              COLUMNPROPERTY(OBJECT_ID(QUOTENAME(@database) + N'.' + QUOTENAME(@schema) + N'.' + QUOTENAME(@name)), c.COLUMN_NAME, 'IsIdentity') AS is_identity,
               CASE WHEN k.COLUMN_NAME IS NULL THEN 0 ELSE 1 END AS is_pk
          FROM ${db(database)}.INFORMATION_SCHEMA.COLUMNS c
          LEFT JOIN (
            SELECT ku.COLUMN_NAME FROM ${db(database)}.INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc
              JOIN ${db(database)}.INFORMATION_SCHEMA.KEY_COLUMN_USAGE ku
                ON ku.CONSTRAINT_NAME = tc.CONSTRAINT_NAME AND ku.TABLE_SCHEMA = tc.TABLE_SCHEMA
-            WHERE tc.CONSTRAINT_TYPE = 'PRIMARY KEY' AND tc.TABLE_SCHEMA = ${quoteLiteral('mssql', schema)}
-              AND tc.TABLE_NAME = ${quoteLiteral('mssql', ref.name)}
+            WHERE tc.CONSTRAINT_TYPE = 'PRIMARY KEY' AND tc.TABLE_SCHEMA = @schema
+              AND tc.TABLE_NAME = @name
          ) k ON k.COLUMN_NAME = c.COLUMN_NAME
-        WHERE c.${where.replace(' AND TABLE_NAME', ' AND c.TABLE_NAME')}
+        WHERE c.TABLE_SCHEMA = @schema AND c.TABLE_NAME = @name
         ORDER BY c.ORDINAL_POSITION`,
+      params,
     );
     const indexRows = await rowsOf<{
       name: string;
@@ -162,8 +183,9 @@ export async function openMssql(options: DriverConnectOptions): Promise<DbDriver
          JOIN ${db(database)}.sys.columns c ON c.object_id = ic.object_id AND c.column_id = ic.column_id
          JOIN ${db(database)}.sys.tables t ON t.object_id = i.object_id
          JOIN ${db(database)}.sys.schemas s ON s.schema_id = t.schema_id
-        WHERE s.name = ${quoteLiteral('mssql', schema)} AND t.name = ${quoteLiteral('mssql', ref.name)} AND i.name IS NOT NULL
+        WHERE s.name = @schema AND t.name = @name AND i.name IS NOT NULL
         ORDER BY i.is_primary_key DESC, i.name, ic.key_ordinal`,
+      params,
     );
     const indexes = new Map<string, DbIndex>();
     for (const row of indexRows) {
@@ -180,7 +202,8 @@ export async function openMssql(options: DriverConnectOptions): Promise<DbDriver
       `SELECT SUM(p.rows) AS rows FROM ${db(database)}.sys.partitions p
          JOIN ${db(database)}.sys.tables t ON t.object_id = p.object_id
          JOIN ${db(database)}.sys.schemas s ON s.schema_id = t.schema_id
-        WHERE s.name = ${quoteLiteral('mssql', schema)} AND t.name = ${quoteLiteral('mssql', ref.name)} AND p.index_id IN (0, 1)`,
+        WHERE s.name = @schema AND t.name = @name AND p.index_id IN (0, 1)`,
+      params,
     ).catch(() => []);
     return {
       ref: { database, schema, name: ref.name },
@@ -256,8 +279,9 @@ export async function openMssql(options: DriverConnectOptions): Promise<DbDriver
            JOIN ${db(database)}.sys.schemas s ON s.schema_id = o.schema_id
            LEFT JOIN (SELECT object_id, SUM(rows) AS rows FROM ${db(database)}.sys.partitions
                        WHERE index_id IN (0, 1) GROUP BY object_id) p ON p.object_id = o.object_id
-          WHERE s.name = ${quoteLiteral('mssql', schema)} AND o.type IN ('U', 'V')
+          WHERE s.name = @schema AND o.type IN ('U', 'V')
           ORDER BY o.name`,
+        { schema },
       );
       return rows.map(
         (row): DbObjectNode => ({
@@ -283,7 +307,12 @@ export async function openMssql(options: DriverConnectOptions): Promise<DbDriver
     async readRows(input: Omit<DbReadRowsInput, 'sessionId'>): Promise<DbRowsPage> {
       const table = await describe(input.ref);
       const ref = table.ref;
-      const text = buildReadRows('mssql', ref, input);
+      const text = buildReadRows(
+        'mssql',
+        ref,
+        input,
+        table.columns.map((column) => column.name),
+      );
       const started = Date.now();
       const request = pool.request();
       request.arrayRowMode = true;
@@ -355,6 +384,27 @@ export async function openMssql(options: DriverConnectOptions): Promise<DbDriver
         }
       }
       return { results };
+    },
+
+    async applyEdits(statements) {
+      const transaction = new sql.Transaction(pool);
+      await transaction.begin();
+      try {
+        let affectedRows = 0;
+        for (const statement of statements) {
+          const request = new sql.Request(transaction);
+          for (const [index, value] of statement.params.entries()) {
+            bindParam(request, `p${index + 1}`, value);
+          }
+          const result = await request.query(statement.text);
+          affectedRows += (result.rowsAffected ?? []).reduce((sum, value) => sum + value, 0);
+        }
+        await transaction.commit();
+        return { affectedRows };
+      } catch (error) {
+        await transaction.rollback().catch(() => undefined);
+        throw new DriverError(describeError(error));
+      }
     },
 
     async settings(): Promise<DbSetting[]> {

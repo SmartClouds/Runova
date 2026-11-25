@@ -4,8 +4,9 @@ import { getModelPrice, MODEL_PRICES, type UsageTokens } from '@runova/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentSessionUsage } from '../../shared/apiTypes';
 import { tempDir } from '../../test/main/fixtures';
+import { ALWAYS_TRUE, dropTable } from '../../test/main/hostileSqlInput';
 import { clearHistorySources, rememberHistorySource } from './historySources';
-import type { HistoryFs } from './sessionHistory';
+import { type HistoryFs, localHistoryFs } from './sessionHistory';
 import { clearSessionUsageCaches, readSessionUsage, summarizeUsage } from './sessionUsage';
 
 /**
@@ -444,6 +445,61 @@ describe('readSessionUsage, OpenCode sessions', () => {
     ).toEqual({
       status: 'unavailable',
     });
+  });
+});
+
+describe('readSessionUsage, OpenCode ids against a real store', () => {
+  it('reads only the row its id names and never lets a hostile id reach the store', async () => {
+    const { DatabaseSync } = await import('node:sqlite');
+    const dbPath = join(root, 'opencode.db');
+    const db = new DatabaseSync(dbPath);
+    try {
+      db.exec(`CREATE TABLE session_v2 (id TEXT, model TEXT, cost REAL, tokens_input INTEGER,
+        tokens_output INTEGER, tokens_reasoning INTEGER, tokens_cache_read INTEGER,
+        tokens_cache_write INTEGER)`);
+      db.exec('CREATE TABLE session_message (id TEXT, session_id TEXT)');
+      const insert = db.prepare('INSERT INTO session_v2 VALUES (?, ?, 0.5, ?, 0, 0, 0, 0)');
+      // `_` is a LIKE wildcard, so `ses_a` must not reach `sesXa`'s row either.
+      for (const [id, input] of [
+        ['ses_a', 10],
+        ['sesXa', 999],
+        [ALWAYS_TRUE, 5000],
+      ] as const) {
+        insert.run(id, PRICED, input);
+      }
+    } finally {
+      db.close();
+    }
+    const fs: HistoryFs = {
+      scope: 'opencode-real-usage',
+      caseInsensitive: false,
+      join: (...parts) => parts.join('/'),
+      home: async () => root,
+      env: async () => undefined,
+      list: async () => [],
+      readRange: async () => '',
+      queryDb: localHistoryFs.queryDb,
+    };
+    const hostile = [ALWAYS_TRUE, dropTable('session_v2'), "ses_a' --"];
+    for (const id of ['ses_a', ...hostile]) {
+      rememberHistorySource('opencode', id, { path: `${dbPath}#${id}`, mtimeMs: 1, dbPath });
+    }
+
+    expect(ok(await readSessionUsage('opencode', 'ses_a', fs)).tokens.input).toBe(10);
+    for (const id of hostile) {
+      expect(await readSessionUsage('opencode', id, fs)).toEqual({ status: 'unavailable' });
+    }
+
+    const after = new DatabaseSync(dbPath);
+    try {
+      expect(after.prepare('SELECT id FROM session_v2 ORDER BY rowid').all()).toEqual([
+        { id: 'ses_a' },
+        { id: 'sesXa' },
+        { id: ALWAYS_TRUE },
+      ]);
+    } finally {
+      after.close();
+    }
   });
 });
 

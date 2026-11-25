@@ -177,6 +177,59 @@ describe('classifyStatement for SQL', () => {
   });
 });
 
+describe('classifyStatement with statements hidden from the scanner', () => {
+  it("reads a PostgreSQL E-string the way the server does, where \\' does not end it", () => {
+    const sql = "SELECT E'\\'') AS t; COMMIT; DROP TABLE y; SELECT 1 --'";
+    expect(splitStatements('postgres', sql)).toHaveLength(4);
+    expect(classifyStatement('postgres', sql)).toEqual({ kind: 'ddl', destructive: true });
+    expect(classifyStatement('postgres', "SELECT E'it\\'s', 'a\\'")).toEqual({
+      kind: 'read',
+      destructive: false,
+    });
+  });
+
+  it('does not read a name ending in e before a quote as an E-string', () => {
+    expect(splitStatements('postgres', "select some'\\'; select 2")).toEqual([
+      "select some'\\'",
+      'select 2',
+    ]);
+  });
+
+  it('holds a PostgreSQL query that is a write when plain strings read backslash escapes', () => {
+    // With standard_conforming_strings off the first string runs on to the next quote, which
+    // leaves ;DROP TABLE y; outside any string.
+    const sql = "SELECT '\\' AS a, ';DROP TABLE y;' AS b";
+    expect(classifyStatement('postgres', sql)).toEqual({ kind: 'ddl', destructive: true });
+    expect(classifyStatement('postgres', "SELECT 'a\\b' AS path").kind).toBe('read');
+  });
+
+  it('finds a SQL Server statement that follows a read with no semicolon', () => {
+    expect(classifyStatement('mssql', 'SELECT 1 COMMIT DROP TABLE y')).toEqual({
+      kind: 'ddl',
+      destructive: true,
+    });
+    expect(classifyStatement('mssql', "SELECT * FROM t EXEC xp_cmdshell N'dir'").kind).toBe(
+      'admin',
+    );
+    expect(classifyStatement('mssql', 'SELECT name FROM t SET ROWCOUNT 0').kind).toBe('admin');
+    expect(
+      classifyStatement('mssql', "SELECT * FROM OPENQUERY(linked, 'DELETE FROM t')").kind,
+    ).toBe('admin');
+  });
+
+  it('keeps a SQL Server read a read when those words are only names, strings or variables', () => {
+    for (const sql of [
+      "SELECT [drop], [set] FROM t WHERE note = 'commit'",
+      'SELECT @set AS x, * FROM #drop',
+      'SELECT * FROM t WITH (NOLOCK) ORDER BY id OFFSET 0 ROWS FETCH NEXT 10 ROWS ONLY',
+      'SELECT CASE WHEN a > 1 THEN 1 ELSE 0 END AS big FROM t',
+      'SELECT created_at, dropped_on FROM t',
+    ]) {
+      expect(classifyStatement('mssql', sql).kind).toBe('read');
+    }
+  });
+});
+
 describe('classifyStatement for CQL', () => {
   it.each([
     ['SELECT * FROM ks.t', 'read'],
