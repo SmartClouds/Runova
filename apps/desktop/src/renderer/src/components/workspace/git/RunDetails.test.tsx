@@ -516,10 +516,26 @@ describe('RunDetails estimates', () => {
     return { ok: true, estimates: { runs: 6, run: usual(runMs), jobs } satisfies RunEstimates };
   }
 
-  /** A run that started two minutes ago. */
+  const secondsAgo = (seconds: number) => new Date(Date.now() - seconds * 1000).toISOString();
+
+  /** A run made ten minutes ago that waited for a runner until two minutes ago. */
   function freshLiveRun(): GithubWorkflowRunInfo {
-    return { ...LIVE_RUN, id: 103, createdAt: new Date(Date.now() - 120_000).toISOString() };
+    return { ...LIVE_RUN, id: 103, createdAt: secondsAgo(600) };
   }
+
+  /** Its job, running for the last two minutes. */
+  const startedJobs = () => ({
+    ok: true,
+    jobs: [
+      job({
+        status: 'in_progress',
+        conclusion: null,
+        startedAt: secondsAgo(120),
+        completedAt: null,
+        steps: [],
+      }),
+    ],
+  });
 
   it('asks how long this pipeline usually takes, leaving the run itself out', async () => {
     runEstimates.mockResolvedValue(estimates(300_000));
@@ -534,19 +550,38 @@ describe('RunDetails estimates', () => {
     );
   });
 
-  it('counts a live run down with a progress bar', async () => {
-    runDetails.mockResolvedValue({ ok: true, jobs: [] });
+  it('counts a live run down from its first job, not from the wait before it', async () => {
+    runDetails.mockResolvedValue(startedJobs());
     runEstimates.mockResolvedValue(estimates(300_000));
     renderDetails(freshLiveRun(), { 'pipelines.runEstimates': runEstimates });
 
     const bar = await screen.findByRole('progressbar', { name: 'CD progress' });
     expect(bar).toHaveAttribute('aria-valuenow', '40');
     expect(screen.getByText('~3m left')).toBeInTheDocument();
+    expect(screen.getByText(/Started 2m ago/)).toHaveTextContent(/running for 2m 0s/);
+  });
+
+  it('does not count down a queued run, only says how long it usually takes', async () => {
+    runDetails.mockResolvedValue({
+      ok: true,
+      // GitHub gives a queued job a start time too.
+      jobs: [job({ status: 'queued', conclusion: null, startedAt: secondsAgo(600), steps: [] })],
+    });
+    runEstimates.mockResolvedValue(estimates(720_000));
+    renderDetails(
+      { ...freshLiveRun(), status: 'queued' },
+      { 'pipelines.runEstimates': runEstimates },
+    );
+
+    expect(await screen.findByLabelText('Usually about 12m')).toHaveTextContent('usually ~12m');
+    expect(screen.getByText(/Queued 10m ago/)).toHaveTextContent(/waiting 10m 0s/);
+    expect(screen.queryByText(/running for|left/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
   });
 
   it('moves the bar along as the run goes on', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
-    runDetails.mockResolvedValue({ ok: true, jobs: [] });
+    runDetails.mockResolvedValue(startedJobs());
     runEstimates.mockResolvedValue(estimates(300_000));
     renderDetails(freshLiveRun(), { 'pipelines.runEstimates': runEstimates });
     const bar = await screen.findByRole('progressbar', { name: 'CD progress' });
@@ -580,11 +615,20 @@ describe('RunDetails estimates', () => {
   });
 
   it('says when a passed run took clearly longer than usual', async () => {
+    runDetails.mockResolvedValue({
+      ok: true,
+      jobs: [
+        job({
+          conclusion: 'success',
+          startedAt: new Date(Date.parse(PASSED_RUN.createdAt) + 12_000).toISOString(),
+        }),
+      ],
+    });
     runEstimates.mockResolvedValue(estimates(180_000));
     renderDetails(PASSED_RUN, { 'pipelines.runEstimates': runEstimates });
 
-    // 4m 12s against the usual 3m.
-    expect(await screen.findByLabelText('1m 12s slower than usual')).toBeInTheDocument();
+    // 4m from its first job (after 12s in the queue) against the usual 3m.
+    expect(await screen.findByLabelText('1m 0s slower than usual')).toBeInTheDocument();
     expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
   });
 

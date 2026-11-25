@@ -8,6 +8,7 @@ import {
   liveEta,
   runRemainingMs,
   stepKeys,
+  workStartedAt,
 } from './pipelineEstimates';
 
 const T0 = Date.parse('2026-11-18T10:00:00Z');
@@ -191,11 +192,56 @@ describe('buildRunEstimates', () => {
     expect(ci?.steps.Deploy).toBeUndefined();
   });
 
+  it('measures a run from its first job, leaving out the wait for a runner', () => {
+    const result = buildRunEstimates([
+      {
+        run: run(400),
+        jobs: [
+          job({ name: 'lint', startedAt: at(320), completedAt: at(350) }),
+          job({ name: 'build', startedAt: at(300), completedAt: at(400) }),
+        ],
+      },
+    ]);
+    expect(result.run?.ms).toBe(s(100));
+  });
+
+  it("measures from the run's creation when its jobs could not be read", () => {
+    expect(buildRunEstimates([{ run: run(400), jobs: [] }]).run?.ms).toBe(s(400));
+  });
+
   it('skips a run whose times make no sense', () => {
     const result = buildRunEstimates([
       { run: { conclusion: 'success' as const, createdAt: at(10), updatedAt: at(0) }, jobs: [] },
     ]);
     expect(result.run).toBeNull();
+  });
+});
+
+describe('workStartedAt', () => {
+  it('is the earliest start among jobs that are running or done', () => {
+    const jobs = [
+      job({ name: 'test', status: 'in_progress', conclusion: null, startedAt: at(90) }),
+      job({ name: 'build', startedAt: at(30) }),
+    ];
+    expect(workStartedAt(jobs)).toBe(at(30));
+  });
+
+  it('ignores a queued job even though GitHub gives it a start time', () => {
+    const queued = job({ name: 'build', status: 'queued', conclusion: null, startedAt: at(0) });
+    const running = job({
+      name: 'lint',
+      status: 'in_progress',
+      conclusion: null,
+      startedAt: at(50),
+    });
+    expect(workStartedAt([queued])).toBeNull();
+    expect(workStartedAt([queued, running])).toBe(at(50));
+  });
+
+  it('ignores a skipped job and is null with nothing started', () => {
+    expect(workStartedAt([job({ name: 'deploy', conclusion: 'skipped' })])).toBeNull();
+    expect(workStartedAt([])).toBeNull();
+    expect(workStartedAt(undefined)).toBeNull();
   });
 });
 

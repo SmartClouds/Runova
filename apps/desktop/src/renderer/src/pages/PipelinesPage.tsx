@@ -33,7 +33,7 @@ import { AutoFixControl } from '@/components/pipelines/autoFix/AutoFixControl';
 import { isAutoFixActive } from '@/components/pipelines/autoFix/autoFixView';
 import { useAutoFixSessions } from '@/components/pipelines/autoFix/useAutoFix';
 import { CopyRunErrorButton } from '@/components/pipelines/CopyRunErrorButton';
-import { EtaBar, EtaText } from '@/components/pipelines/EstimateBits';
+import { EtaBar, EtaText, UsualHint } from '@/components/pipelines/EstimateBits';
 import { estimateFromHistory } from '@/components/pipelines/estimateView';
 import {
   RunAnnotations,
@@ -276,7 +276,9 @@ function RunRow({
   const colours = toneColours(tone);
   const failed = tone.outcome === 'failed';
   const duration = runDuration(item);
-  const counting = usual !== null && isLiveRun(item);
+  // A run still waiting for a runner has not started, so it shows its usual time, not a countdown.
+  const counting = usual !== null && tone.outcome === 'running';
+  const waiting = usual !== null && tone.outcome === 'queued';
   const now = useNow(counting);
   const elapsed = Math.max(now - Date.parse(item.createdAt), 0);
   const eta = usual && counting ? liveEta(elapsed, usual.ms - elapsed, usual.ms) : null;
@@ -338,6 +340,12 @@ function RunRow({
                 <>
                   <span aria-hidden>·</span>
                   <EtaText eta={eta} estimate={usual} />
+                </>
+              ) : null}
+              {usual && waiting ? (
+                <>
+                  <span aria-hidden>·</span>
+                  <UsualHint estimate={usual} lead="usually" />
                 </>
               ) : null}
               <span aria-hidden>·</span>

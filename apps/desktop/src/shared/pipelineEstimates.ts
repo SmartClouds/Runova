@@ -127,6 +127,28 @@ function push(map: Map<string, number[]>, key: string, value: number | null): vo
   else map.set(key, [value]);
 }
 
+/**
+ * When a run's work began: the earliest start among its jobs that have really started. GitHub fills
+ * in `started_at` on a job that is still queued too, so the status decides, not the field. A
+ * skipped job never ran. Null while no job has started, e.g. when every runner is busy.
+ */
+export function workStartedAt(
+  jobs: Pick<GithubRunJob, 'status' | 'conclusion' | 'startedAt'>[] | undefined,
+): string | null {
+  let earliest: string | null = null;
+  let earliestMs = Number.POSITIVE_INFINITY;
+  for (const job of jobs ?? []) {
+    if (job.status !== 'in_progress' && job.status !== 'completed') continue;
+    if (job.conclusion === 'skipped' || !job.startedAt) continue;
+    const ms = Date.parse(job.startedAt);
+    if (Number.isFinite(ms) && ms < earliestMs) {
+      earliest = job.startedAt;
+      earliestMs = ms;
+    }
+  }
+  return earliest;
+}
+
 export interface EstimateHistoryEntry {
   run: Pick<GithubWorkflowRunInfo, 'conclusion' | 'createdAt' | 'updatedAt'>;
   jobs: GithubRunJob[];
@@ -145,7 +167,8 @@ export function buildRunEstimates(history: EstimateHistoryEntry[]): RunEstimates
   const stepSamples = new Map<string, Map<string, number[]>>();
 
   for (const entry of passed) {
-    const runMs = spanMs(entry.run.createdAt, entry.run.updatedAt);
+    // From the first job's start, so time spent waiting for a runner is not part of the usual time.
+    const runMs = spanMs(workStartedAt(entry.jobs) ?? entry.run.createdAt, entry.run.updatedAt);
     if (runMs !== null) runSamples.push(runMs);
     for (const job of entry.jobs) {
       if (job.conclusion !== 'success') continue;

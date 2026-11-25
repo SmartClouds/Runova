@@ -96,9 +96,12 @@ export function EtaText({
 /** Roughly how long something that has not started yet usually takes: `~45s`. */
 export function UsualHint({
   estimate,
+  lead,
   className,
 }: {
   estimate: DurationEstimate;
+  /** A word shown before it, e.g. `usually`, where a bare `~45s` could pass for time left. */
+  lead?: string;
   className?: string;
 }): React.JSX.Element {
   const approx = approxDuration(estimate.ms);
@@ -111,7 +114,7 @@ export function UsualHint({
           className,
         )}
       >
-        {`~${approx}`}
+        {lead ? `${lead} ~${approx}` : `~${approx}`}
       </span>
     </SimpleTooltip>
   );

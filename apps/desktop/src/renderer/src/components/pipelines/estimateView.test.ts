@@ -116,7 +116,7 @@ describe('jobLiveEta', () => {
 });
 
 describe('runLiveEta', () => {
-  const run = { status: 'in_progress' as const, createdAt: at(0) };
+  const run = { status: 'in_progress' as const };
   const estimates: RunEstimates = {
     runs: 6,
     run: estimate(s(300)),
@@ -128,8 +128,27 @@ describe('runLiveEta', () => {
   });
 
   it('waits for a job that is running late', () => {
+    const first = job({ id: 2, name: 'lint', status: 'completed', completedAt: at(30) });
     const late = job({ startedAt: at(250) });
-    expect(runLiveEta(run, [late], estimates, T0 + s(260))?.remainingMs).toBe(s(90));
+    expect(runLiveEta(run, [first, late], estimates, T0 + s(260))?.remainingMs).toBe(s(90));
+  });
+
+  it('does not count down while the run waits for a runner', () => {
+    const queued = job({ status: 'queued', startedAt: at(0) });
+    expect(runLiveEta({ status: 'queued' }, [queued], estimates, T0 + s(600))).toBeNull();
+    expect(runLiveEta({ status: 'queued' }, [], estimates, T0 + s(600))).toBeNull();
+  });
+
+  it('has nothing for a running run until its jobs are read', () => {
+    expect(runLiveEta(run, undefined, estimates, T0 + s(60))).toBeNull();
+  });
+
+  it('starts the clock when the first job starts, not when the run was made', () => {
+    // Created at 0 (or long before, for a re-run), but waited ten minutes for a runner.
+    const started = job({ startedAt: at(600) });
+    const eta = runLiveEta(run, [started], estimates, T0 + s(660));
+    expect(eta?.remainingMs).toBe(s(240));
+    expect(eta?.overByMs).toBe(0);
   });
 
   it('has nothing for a finished run or a pipeline with no passing runs yet', () => {

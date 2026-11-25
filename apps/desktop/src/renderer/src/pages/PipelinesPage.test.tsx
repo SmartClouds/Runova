@@ -463,6 +463,36 @@ describe('PipelinesPage run list', () => {
       const done = (await screen.findByText('Earlier 1')).closest('li') as HTMLElement;
       expect(within(done).queryByRole('progressbar')).toBeNull();
     });
+
+    it('does not count down a queued run, only says how long its pipeline usually takes', async () => {
+      const ago = (seconds: number) => new Date(Date.now() - seconds * 1000).toISOString();
+      const queued = run({
+        id: 30,
+        workflowId: 5,
+        status: 'queued',
+        conclusion: null,
+        displayTitle: 'Wait for it',
+        createdAt: ago(600),
+        updatedAt: ago(600),
+      });
+      const earlier = [1, 2, 3].map((n) =>
+        run({
+          id: 30 - n,
+          workflowId: 5,
+          displayTitle: `Earlier ${n}`,
+          createdAt: ago(n * 3600),
+          updatedAt: ago(n * 3600 - 240),
+        }),
+      );
+      renderPage({
+        'pipelines.dashboardActivity': async () => activity({ runs: [queued, ...earlier] }),
+      });
+
+      const row = (await screen.findByText('Wait for it')).closest('li') as HTMLElement;
+      expect(within(row).getByLabelText('Usually about 4m')).toHaveTextContent('usually ~4m');
+      expect(within(row).queryByText(/left|longer than usual/)).toBeNull();
+      expect(within(row).queryByRole('progressbar')).toBeNull();
+    });
   });
 
   it('opens the project a run belongs to, on its git tab', async () => {

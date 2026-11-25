@@ -14,6 +14,7 @@ import {
   liveEta,
   runRemainingMs,
   spanMs,
+  workStartedAt,
 } from '@shared/pipelineEstimates';
 import { approxDuration, formatMs, isLiveRun } from './runStatus';
 
@@ -65,16 +66,19 @@ export function jobLiveEta(
 
 /**
  * Where a live run stands: its usual time, unless one of its jobs is running so late that the run
- * cannot finish before it does.
+ * cannot finish before it does. The clock starts when the first job does, so a run waiting for a
+ * runner (or a re-run, which keeps the first attempt's creation time) does not count down yet.
  */
 export function runLiveEta(
-  run: Pick<GithubWorkflowRunInfo, 'status' | 'createdAt'>,
+  run: Pick<GithubWorkflowRunInfo, 'status'>,
   jobs: GithubRunJob[] | undefined,
   estimates: RunEstimates | undefined,
   now: number,
 ): LiveEta | null {
   if (!estimates?.run || !isLiveRun(run)) return null;
-  const elapsed = since(run.createdAt, now);
+  const started = workStartedAt(jobs);
+  if (!started) return null;
+  const elapsed = since(started, now);
   const jobsLeft = (jobs ?? []).flatMap((job) => {
     const usual = estimates.jobs[job.name];
     return usual ? [jobRemainingMs(job, usual, now)] : [];

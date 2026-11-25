@@ -2,11 +2,12 @@ import type { Project } from '@runova/core';
 import type {
   DurationEstimate,
   GithubActionsRunErrorInput,
+  GithubRunJob,
   GithubWorkflowInfo,
   GithubWorkflowRunInfo,
   RunEstimates,
 } from '@shared/apiTypes';
-import { type LiveEta, spanMs } from '@shared/pipelineEstimates';
+import { type LiveEta, spanMs, workStartedAt } from '@shared/pipelineEstimates';
 import { useState } from 'react';
 import { ChevronRight, Copy, ExternalLink, GitBranch, GitCommit } from '@/components/icons';
 import { SECTION_HEADING } from '@/components/pageKit';
@@ -14,7 +15,7 @@ import { AutoFixControl } from '@/components/pipelines/autoFix/AutoFixControl';
 import { AutoFixPanel } from '@/components/pipelines/autoFix/AutoFixPanel';
 import { sessionForRun } from '@/components/pipelines/autoFix/autoFixView';
 import { useAutoFixSessions } from '@/components/pipelines/autoFix/useAutoFix';
-import { DeltaChip, EtaBar, EtaText } from '@/components/pipelines/EstimateBits';
+import { DeltaChip, EtaBar, EtaText, UsualHint } from '@/components/pipelines/EstimateBits';
 import { runLiveEta } from '@/components/pipelines/estimateView';
 import { InlineProblem } from '@/components/pipelines/InlineProblem';
 import { RerunRunButton } from '@/components/pipelines/RerunRunButton';
@@ -208,14 +209,22 @@ function FailureOutput({ input }: { input: GithubActionsRunErrorInput }): React.
   );
 }
 
+/** ` · took 2m 5s`, or nothing when the span cannot be told. */
+function withSpan(verb: string, span: string): string {
+  return span ? ` · ${verb} ${span}` : '';
+}
+
 function RunFacts({
   run,
+  jobs,
   now,
   label,
   usual,
   eta,
 }: {
   run: GithubWorkflowRunInfo;
+  /** The run's jobs, once read: the run's clock starts when the first of them does. */
+  jobs: GithubRunJob[] | undefined;
   now: number;
   /** What the progress bar is named after: the pipeline. */
   label: string;
@@ -224,12 +233,20 @@ function RunFacts({
   eta: LiveEta | null;
 }): React.JSX.Element {
   const live = isLiveRun(run);
-  const span = live ? spanDuration(run.createdAt, null, now) : runDuration(run);
-  const timing = `Started ${timeAgo(run.createdAt)}${
-    span ? ` · ${live ? 'running for' : 'took'} ${span}` : ''
-  }`;
-  // Only a passing run is held up to the usual time: a failed one stopped early.
-  const tookMs = run.conclusion === 'success' ? spanMs(run.createdAt, run.updatedAt) : null;
+  const workStart = workStartedAt(jobs);
+  // Still waiting for a runner: nothing is counted against the usual time yet.
+  const waiting = live && !workStart && runTone(run).outcome === 'queued';
+  // A re-run keeps the first attempt's creation time, so a running one goes by its first job.
+  const from = live && workStart ? workStart : run.createdAt;
+  const timing = waiting
+    ? `Queued ${timeAgo(run.createdAt)}${withSpan('waiting', spanDuration(run.createdAt, null, now))}`
+    : live
+      ? `Started ${timeAgo(from)}${withSpan('running for', spanDuration(from, null, now))}`
+      : `Started ${timeAgo(run.createdAt)}${withSpan('took', runDuration(run))}`;
+  // Only a passing run is held up to the usual time: a failed one stopped early. It is measured
+  // the way the usual time is, from the first job's start.
+  const tookMs =
+    run.conclusion === 'success' ? spanMs(workStart ?? run.createdAt, run.updatedAt) : null;
 
   return (
     <div className="space-y-1">
@@ -254,9 +271,17 @@ function RunFacts({
         ) : null}
       </ul>
       <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
-        <SimpleTooltip label={new Date(run.createdAt).toLocaleString()} side="bottom" align="start">
+        <SimpleTooltip label={new Date(from).toLocaleString()} side="bottom" align="start">
           <p className="w-fit text-[11px] text-muted-foreground">{timing}</p>
         </SimpleTooltip>
+        {usual && waiting ? (
+          <>
+            <span aria-hidden className="text-[11px] text-muted-foreground">
+              ·
+            </span>
+            <UsualHint estimate={usual} lead="usually" />
+          </>
+        ) : null}
         {usual && eta ? (
           <>
             <span aria-hidden className="text-[11px] text-muted-foreground">
@@ -348,6 +373,7 @@ export function RunDetails({
           </div>
           <RunFacts
             run={run}
+            jobs={details.data}
             now={now}
             label={workflow.name}
             usual={estimates?.run}
