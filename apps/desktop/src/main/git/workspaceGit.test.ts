@@ -108,6 +108,54 @@ describe.runIf(git)('readWorkspaceGitState line counts', () => {
 });
 
 /**
+ * Tagging moves no file the status reads, and the workspace commit list only re-reads when the
+ * pushed state changes. A release tool or an agent that ran `git tag` on HEAD used to leave the
+ * list without its tag chip, while GitHub showed the tag and "Suggest with AI" knew about it.
+ */
+describe.runIf(git)('readWorkspaceGitState tags signature', () => {
+  it('is empty while the repo has no tags', async () => {
+    const repo = initGitRepo({ 'README.md': '# test\n' });
+
+    expect((await readWorkspaceGitState(repo.dir)).tagsSignature).toBe('');
+  });
+
+  it('changes when a lightweight tag lands on HEAD, though HEAD itself does not move', async () => {
+    const repo = initGitRepo({ 'README.md': '# test\n' });
+    const before = await readWorkspaceGitState(repo.dir);
+
+    repo.git('tag', 'v1.2.0');
+    const after = await readWorkspaceGitState(repo.dir);
+
+    expect(after.head).toBe(before.head);
+    expect(after.tagsSignature).not.toBe(before.tagsSignature);
+    expect(after.tagsSignature).not.toBe('');
+  });
+
+  it('changes for an annotated tag, a moved tag and a deleted one, and holds still otherwise', async () => {
+    const repo = initGitRepo({ 'README.md': '# test\n' });
+    const signature = async (): Promise<string> =>
+      (await readWorkspaceGitState(repo.dir)).tagsSignature;
+
+    repo.git('tag', '-a', 'v1.0.0', '-m', 'first');
+    const tagged = await signature();
+    expect(tagged).not.toBe('');
+    expect(await signature()).toBe(tagged);
+
+    // A file edit is a status change, not a tag change.
+    writeFileSync(join(repo.dir, 'README.md'), '# edited\n');
+    expect(await signature()).toBe(tagged);
+
+    repo.commitAll('second commit');
+    repo.git('tag', '-f', '-a', 'v1.0.0', '-m', 'moved');
+    const moved = await signature();
+    expect(moved).not.toBe(tagged);
+
+    repo.git('tag', '-d', 'v1.0.0');
+    expect(await signature()).toBe('');
+  });
+});
+
+/**
  * The image viewer that stands in for a binary diff. Git hands pictures over as blobs, so what
  * matters here is that both sides come back byte for byte: a checkout filter that turned an LF
  * into a CRLF on the way would leave the viewer showing a broken picture.

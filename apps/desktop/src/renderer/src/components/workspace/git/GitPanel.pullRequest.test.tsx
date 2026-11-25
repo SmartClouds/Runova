@@ -70,6 +70,7 @@ function gitState(overrides: Partial<WorkspaceGitState> = {}): WorkspaceGitState
     unstaged: [],
     untracked: [],
     untrackedTruncated: false,
+    tagsSignature: '',
     projectPrefix: '',
     ...overrides,
   } as WorkspaceGitState;

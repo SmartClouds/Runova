@@ -1617,6 +1617,11 @@ export interface WorkspaceGitState {
    * project is the repository root. Status paths are relative to the root, not the project.
    */
   projectPrefix: string;
+  /**
+   * Changes whenever a tag is added, moved or deleted. Empty when the repo has no tags. Tagging
+   * leaves HEAD where it is, so the commit list keys on this to pick up new tag chips.
+   */
+  tagsSignature: string;
 }
 
 export type GitDiffSide = 'staged' | 'unstaged' | 'untracked' | 'conflict';

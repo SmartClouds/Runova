@@ -31,6 +31,7 @@ function gitState(overrides: Record<string, unknown> = {}): WorkspaceGitState {
     unstaged: [{ path: 'src/app.ts', status: 'M' }],
     untracked: [],
     untrackedTruncated: false,
+    tagsSignature: '',
     projectPrefix: '',
     ...overrides,
   } as WorkspaceGitState;

@@ -122,8 +122,13 @@ export function CommitsSection({
   const branch = state?.branch ?? null;
   const [expanded, setExpanded] = useState<string | null>(null);
   const history = useQuery({
-    // HEAD in the key refreshes the list the moment a commit, pull or checkout lands.
-    queryKey: [...queryKeys.gitBranchHistory(project.id, branch ?? 'HEAD'), state?.head ?? ''],
+    // HEAD in the key refreshes the list the moment a commit, pull or checkout lands. Tagging
+    // leaves HEAD alone, so the tags signature is in the key too, or a new tag never shows.
+    queryKey: [
+      ...queryKeys.gitBranchHistory(project.id, branch ?? 'HEAD'),
+      state?.head ?? '',
+      state?.tagsSignature ?? '',
+    ],
     queryFn: () => window.runova.git.branchHistory(project.id, branch ?? 'HEAD'),
     enabled: Boolean(state?.isRepo && state.head),
     meta: { silentLoading: true },

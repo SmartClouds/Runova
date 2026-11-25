@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { lstat, mkdir, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
@@ -65,6 +65,7 @@ export const EMPTY_WORKSPACE_GIT_STATE: WorkspaceGitState = {
   untracked: [],
   untrackedTruncated: false,
   projectPrefix: '',
+  tagsSignature: '',
 };
 
 interface CountedFile {
@@ -172,7 +173,7 @@ export async function readWorkspaceGitState(cwd: string): Promise<WorkspaceGitSt
   const repo = await locateRepo(cwd);
   if (!repo) return EMPTY_WORKSPACE_GIT_STATE;
   const { root } = repo;
-  const [status, unstagedStat, stagedStat, remotes, realFolder] = await Promise.all([
+  const [status, unstagedStat, stagedStat, remotes, tagRefs, realFolder] = await Promise.all([
     // --no-optional-locks keeps the read from rewriting the index, which the watcher would
     // otherwise see as a change and answer with another read.
     gitOrNull(root, [
@@ -186,6 +187,7 @@ export async function readWorkspaceGitState(cwd: string): Promise<WorkspaceGitSt
     gitOrNull(root, ['--no-optional-locks', 'diff', '--numstat', '-z']),
     gitOrNull(root, ['--no-optional-locks', 'diff', '--cached', '--numstat', '-z']),
     gitOrNull(root, ['remote']),
+    gitOrNull(root, ['for-each-ref', '--format=%(refname) %(objectname)', 'refs/tags']),
     realpath(cwd).catch(() => resolve(cwd)),
   ]);
   const prefix = relative(root, realFolder);
@@ -208,7 +210,18 @@ export async function readWorkspaceGitState(cwd: string): Promise<WorkspaceGitSt
     untrackedTruncated: parsed.untracked.length > MAX_UNTRACKED,
     projectPrefix:
       prefix.startsWith('..') || isAbsolute(prefix) ? '' : prefix.replaceAll('\\', '/'),
+    tagsSignature: tagsSignature(tagRefs ?? ''),
   };
+}
+
+/**
+ * A short fingerprint of every tag and what it points at. Tagging a commit changes nothing the
+ * status reads, so without this a tag made in a terminal or by a release tool left the pushed
+ * state, and the commit list keyed on it, exactly as they were.
+ */
+function tagsSignature(refs: string): string {
+  const trimmed = refs.trim();
+  return trimmed ? createHash('sha1').update(trimmed).digest('hex').slice(0, 16) : '';
 }
 
 /**

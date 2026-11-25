@@ -3536,6 +3536,8 @@ function TagVersionDialog({
         storeTagPrefix(projectId, splitTag(nextTag)?.prefix ?? trimmedPrefix);
         void queryClient.invalidateQueries({ queryKey: queryKeys.gitTags(projectId) });
         void queryClient.invalidateQueries({ queryKey: queryKeys.gitStatus(projectId) });
+        // The commit lists draw a chip per tag, and tagging HEAD does not move HEAD.
+        void queryClient.invalidateQueries({ queryKey: queryKeys.gitBranchHistories(projectId) });
         handleOpenChange(false);
       } else {
         toast.error(result.message);

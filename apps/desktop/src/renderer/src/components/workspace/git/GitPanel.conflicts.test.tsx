@@ -40,6 +40,7 @@ const state = {
   unstaged: [{ path: 'README.md', status: 'M' }],
   untracked: [],
   untrackedTruncated: false,
+  tagsSignature: '',
   projectPrefix: '',
 } as WorkspaceGitState;
 

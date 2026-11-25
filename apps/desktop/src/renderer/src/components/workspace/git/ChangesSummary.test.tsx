@@ -32,6 +32,7 @@ function state(partial: Partial<WorkspaceGitState>): WorkspaceGitState {
     unstaged: [],
     untracked: [],
     untrackedTruncated: false,
+    tagsSignature: '',
     projectPrefix: '',
     ...partial,
   };

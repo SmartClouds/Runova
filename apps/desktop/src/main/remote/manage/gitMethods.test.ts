@@ -28,6 +28,7 @@ const state: WorkspaceGitState = {
   unstaged: [],
   untracked: [],
   untrackedTruncated: false,
+  tagsSignature: '',
   projectPrefix: 'apps/web',
 };
 

@@ -40,8 +40,9 @@ vi.mock('@/components/editor/MonacoDiffEditor', () => ({
 
 const { ProjectVersionDialogs } = await import('./ProjectDetailPage');
 const { useVersionDialogStore } = await import('@/stores/versionDialogStore');
-const { useConfirmStore } = await import('@/stores/confirmStore');
+const { resolveConfirm, useConfirmStore } = await import('@/stores/confirmStore');
 const { useApplyVersionLogStore } = await import('@/stores/applyVersionLogStore');
+const { queryKeys } = await import('@/lib/queryKeys');
 
 const status = {
   isRepo: true,
@@ -245,6 +246,29 @@ describe('ProjectVersionDialogs', () => {
       expect(useConfirmStore.getState().title).toBe('Version bump not committed'),
     );
     expect(createTag).not.toHaveBeenCalled();
+  });
+
+  it('refreshes the commit lists after creating a tag, since HEAD does not move', async () => {
+    // Without this the History dialog and the workspace commit list kept showing the commit
+    // with no tag chip, while the tag was already on GitHub.
+    const createTag = vi.fn(async () => ({ ok: true, message: 'Created tag v1.1.0.' }));
+    const { user, queryClient } = renderDialogs({ 'git.createTag': createTag });
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+
+    await user.type(await screen.findByLabelText('Version'), '1.1.0');
+    await user.click(screen.getByRole('button', { name: /Create & push tag/ }));
+    // The files were never updated for this version, so it asks before tagging.
+    await waitFor(() =>
+      expect(useConfirmStore.getState().title).toBe('Skip updating version in files?'),
+    );
+    resolveConfirm(true);
+
+    await waitFor(() => expect(createTag).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(invalidate.mock.calls.map(([filters]) => filters?.queryKey)).toContainEqual(
+        queryKeys.gitBranchHistories('p1'),
+      ),
+    );
   });
 
   it('cuts a beta from the bump buttons and goes back to stable', async () => {

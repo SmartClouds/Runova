@@ -287,7 +287,10 @@ export async function deleteProjectTag(
   if (!TAG_NAME_PATTERN.test(tag) || tag.includes('..') || tag.includes('@{')) {
     return { ok: false, message: 'That is not a tag name.' };
   }
-  return runGitOp(() => deleteTag(cwd, tag, remote));
+  const result = await runGitOp(() => deleteTag(cwd, tag, remote));
+  // The commit list keys on the repo's tags, and no window has to be watching to hold one.
+  void refreshWorkspaceState(projectId, cwd);
+  return result;
 }
 
 export async function createTag(input: CreateTagInput): Promise<GitOpResult> {
@@ -341,6 +344,7 @@ export async function createTag(input: CreateTagInput): Promise<GitOpResult> {
         : `Tag ${tag} already existed locally, pushed the branch and tag to ${remote}.`;
     });
     if (existingResult.ok) schedulePipelineCheck(input.projectId);
+    void refreshWorkspaceState(input.projectId, cwd);
     return existingResult;
   }
 
@@ -357,6 +361,8 @@ export async function createTag(input: CreateTagInput): Promise<GitOpResult> {
     return `Created tag ${tag} and pushed the branch and tag to origin.`;
   });
   if (createdResult.ok && input.push) schedulePipelineCheck(input.projectId);
+  // Tagging leaves HEAD where it was, so this push is what gets the new tag onto the commit list.
+  void refreshWorkspaceState(input.projectId, cwd);
   return createdResult;
 }
 
