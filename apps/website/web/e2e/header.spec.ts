@@ -88,6 +88,39 @@ test.describe('header menu', () => {
     await expect(page).toHaveURL(/\/download$/);
   });
 
+  test('shimmers the placeholders only while their panel is open', async ({ page }) => {
+    // The shimmer moves a background, so it runs on the main thread every frame. The placeholders
+    // sit in the closed panels until the menu is first opened, which on most visits is never.
+    const shimmering = (scope: string) =>
+      page.evaluate(
+        (selector) =>
+          document
+            .getAnimations()
+            .filter(
+              (animation) =>
+                animation.playState === 'running' &&
+                ((animation.effect as KeyframeEffect).target as Element | null)?.matches(selector),
+            ).length,
+        `${scope} .mp-skeleton`,
+      );
+    let release = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route('**/nav/latest.json', async (route) => {
+      await held;
+      await route.continue();
+    });
+    await page.goto('/features');
+    expect(await shimmering('header')).toBe(0);
+
+    await main(page).getByRole('link', { name: 'News' }).hover();
+    await expect(panel(page, 'news')).toBeVisible();
+    await expect.poll(() => shimmering('#mega-news')).toBeGreaterThan(0);
+    expect(await shimmering('#mega-blog')).toBe(0);
+    release();
+  });
+
   test('moves into a sheet on a phone, which opens, fills and closes', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/features');

@@ -22,6 +22,8 @@ import {
 const LEAD = 0.7;
 /** The extra time after the last line before the run counts as done (the Commit button lands). */
 const TAIL = 0.8;
+/** Milliseconds between the token meter's steps. */
+const METER_STEP = 100;
 /** How much of the hero has to be on screen before the run starts. */
 const VISIBLE = 0.2;
 
@@ -70,21 +72,27 @@ function start(hero: HTMLElement) {
     window.setTimeout(() => showStatus(at), (LEAD + at) * 1000);
   }
 
-  // The meter eases out toward its total over the run.
+  // The meter eases out toward its total over the run. It steps ten times a second, like a real
+  // usage meter, rather than on every frame: each new label restyles and lays out the status bar,
+  // and doing that 60 times a second for the whole run kept the main thread busy while the page
+  // was still loading.
   const begin = performance.now() + LEAD * 1000;
   const span = DEMO_LENGTH * 1000;
-  const tick = (now: number) => {
-    const progress = Math.min(1, Math.max(0, (now - begin) / span));
-    const eased = 1 - (1 - progress) ** 2;
-    if (tokens) tokens.textContent = formatTokens(Math.round((DEMO_TOKENS * eased) / 100) * 100);
-    if (cost) cost.textContent = formatCost(Math.round(DEMO_COST_CENTS * eased));
-    if (progress < 1) requestAnimationFrame(tick);
+  const show = (element: HTMLElement | null, text: string) => {
+    if (element && element.textContent !== text) element.textContent = text;
   };
-  requestAnimationFrame(tick);
+  const step = () => {
+    const progress = Math.min(1, Math.max(0, (performance.now() - begin) / span));
+    const eased = 1 - (1 - progress) ** 2;
+    show(tokens, formatTokens(Math.round((DEMO_TOKENS * eased) / 100) * 100));
+    show(cost, formatCost(Math.round(DEMO_COST_CENTS * eased)));
+    if (progress < 1) window.setTimeout(step, METER_STEP);
+  };
+  window.setTimeout(step, LEAD * 1000);
 
   window.setTimeout(
     () => {
-      // A hidden tab stops animation frames, so the meter may not have finished on its own.
+      // A hidden tab slows timers down, so the meter may not have finished on its own.
       showStatus(DEMO_LENGTH);
       if (tokens) tokens.textContent = formatTokens(DEMO_TOKENS);
       if (cost) cost.textContent = formatCost(DEMO_COST_CENTS);

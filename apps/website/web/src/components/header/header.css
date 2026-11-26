@@ -645,7 +645,16 @@
     linear-gradient(100deg, transparent 30%, hsl(var(--foreground) / 0.06) 50%, transparent 70%) 0 0
     / 200% 100%,
     hsl(var(--foreground) / 0.05);
-  animation: mp-shimmer 1.4s linear infinite;
+  animation: mp-shimmer 1.4s linear infinite paused;
+}
+
+/* The shimmer moves the background, which the compositor cannot do, so while it runs every frame
+   goes through the main thread. The placeholders stay until the visitor first opens the menu, so
+   on most visits they sit in a closed panel for as long as the page is open. They only shimmer
+   where someone can see them. */
+.mega-panel[data-state="open"] .mp-skeleton,
+.sheet[data-state="open"] .mp-skeleton {
+  animation-play-state: running;
 }
 
 .mp-feature.mp-skeleton {
