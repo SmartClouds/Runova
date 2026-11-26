@@ -35,6 +35,11 @@ const notifications = vi.hoisted(() => ({ showOsNotification: vi.fn() }));
 vi.mock('../notifications/osNotification', () => notifications);
 vi.mock('../pipelines/watcher', () => ({ schedulePipelineCheck: vi.fn() }));
 
+// The git channels bring most of the main process with them. Vitest keeps the transformed files
+// between the hooks' imports, so loading them once here moves the cold transform (slow under
+// coverage on the Mac runner's disk) out of the first hook's time limit, as in aiAccess.test.ts.
+await import('./git');
+
 let folder: string;
 let window: InstanceType<typeof BrowserWindow>;
 

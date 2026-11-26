@@ -208,7 +208,15 @@ public sealed class TelegramNotifierTests : IAsyncLifetime
         await RaiseDiskAsync();
         await WaitForMessagesAsync(2);
 
+        // The fake counts the request as it arrives, but the status is updated only once its answer is
+        // back, so on a busy machine the first look can still see the refusal.
         var status = await _manager.StatusAsync(Cancel);
+        for (var i = 0; i < 1_000 && status.SentCount == 0; i++)
+        {
+            await Task.Delay(10, Cancel);
+            status = await _manager.StatusAsync(Cancel);
+        }
+
         Assert.Null(status.LastError);
         Assert.Equal(1, status.SentCount);
         Assert.Equal(Texts[0], Texts[1]);
