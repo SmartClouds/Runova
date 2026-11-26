@@ -69,6 +69,7 @@ function editedWizard(serverId: string, details: StackDetails, source: WizardSou
       reached: 1,
       source,
       nameTouched: true,
+      environmentTouched: true,
       proxied: sameCompose ? details.revisions[0]?.proxiedServices : undefined,
     }),
   );

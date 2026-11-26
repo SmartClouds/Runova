@@ -297,6 +297,80 @@ describe('previewStack', () => {
     expect(preview.blocking).toBe('The compose file has no services.');
   });
 
+  describe('a required variable with no value', () => {
+    const REQUIRED = `services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: \${POSTGRES_USER:?set POSTGRES_USER in .env}
+`;
+    const prefix =
+      'services.postgres.environment.POSTGRES_USER: POSTGRES_USER is required: set POSTGRES_USER in .env.';
+
+    it('says to pick an environment when none is picked', async () => {
+      const folder = folderWith({ 'compose.yaml': REQUIRED, '.env': 'POSTGRES_USER=app\n' });
+      const preview = await previewStack(deps(folder), {
+        projectId: 'p1',
+        composePath: 'compose.yaml',
+        environmentId: null,
+      });
+      expect(preview.blocking).toBe(
+        `${prefix} No environment is picked for this app, so nothing sets POSTGRES_USER. Go back to Source and pick the environment that holds your .env values.`,
+      );
+    });
+
+    it('names the picked files when none of them sets it', async () => {
+      const folder = folderWith({ 'compose.yaml': REQUIRED });
+      const preview = await previewStack(
+        deps(folder, [], environment([{ key: 'POSTGRES_DB', value: 'shop' }])),
+        { projectId: 'p1', composePath: 'compose.yaml', environmentId: 'e1' },
+      );
+      expect(preview.blocking).toBe(
+        `${prefix} The env files picked from Production (.env) do not set POSTGRES_USER. Add it in the project's Environments tab, or tick the file that has it.`,
+      );
+    });
+
+    it('says when the picked environment has no files', async () => {
+      const folder = folderWith({ 'compose.yaml': REQUIRED });
+      const empty: ResolvedProjectEnvironment = {
+        id: 'e1',
+        name: 'Production',
+        files: [],
+        entries: [],
+      };
+      const preview = await previewStack(deps(folder, [], empty), {
+        projectId: 'p1',
+        composePath: 'compose.yaml',
+        environmentId: 'e1',
+      });
+      expect(preview.blocking).toBe(
+        `${prefix} The environment Production has no files yet, so nothing sets POSTGRES_USER. Add your .env file to it in the project's Environments tab.`,
+      );
+    });
+
+    it('deploys once the picked environment sets it', async () => {
+      const folder = folderWith({ 'compose.yaml': REQUIRED });
+      const preview = await previewStack(
+        deps(folder, [], environment([{ key: 'POSTGRES_USER', value: 'app' }])),
+        { projectId: 'p1', composePath: 'compose.yaml', environmentId: 'e1' },
+      );
+      expect(preview.blocking).toBeNull();
+      expect(preview.services.map((service) => service.name)).toEqual(['postgres']);
+    });
+
+    it('leaves a broken ${...} as the file problem it is', async () => {
+      const folder = folderWith({
+        'compose.yaml': 'services:\n  web:\n    image: nginx:${TAG\n',
+      });
+      const preview = await previewStack(deps(folder), {
+        projectId: 'p1',
+        composePath: 'compose.yaml',
+        environmentId: null,
+      });
+      expect(preview.blocking).not.toMatch(/environment/i);
+    });
+  });
+
   it('keeps the rendered .env for the upload, never in what the renderer gets', async () => {
     const folder = folderWith({ 'compose.yaml': COMPOSE });
     const source = await readStackSource(

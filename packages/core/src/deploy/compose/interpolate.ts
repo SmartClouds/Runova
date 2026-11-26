@@ -11,7 +11,12 @@ export type ComposeLookup = (name: string) => string | undefined;
 
 export type ComposeInterpolation<T> =
   | { ok: true; value: T; missing: string[] }
-  | { ok: false; reason: string };
+  | {
+      ok: false;
+      reason: string;
+      /** The variable a `${NAME:?...}` or `${NAME?...}` needed and the lookup did not give. */
+      unsetVariable?: string;
+    };
 
 const NAME = /^[_a-z][_a-z0-9]*/i;
 
@@ -21,7 +26,21 @@ const BRACED = /^([_a-z][_a-z0-9]*)(?:(:?[-+?])([^\n]*))?$/i;
 /** Defaults inside defaults deeper than this are refused rather than recursed into. */
 const MAX_DEPTH = 50;
 
-class TemplateError extends Error {}
+class TemplateError extends Error {
+  constructor(
+    message: string,
+    /** Set when the error is a required variable with no value. */
+    readonly unsetVariable?: string,
+  ) {
+    super(message);
+  }
+}
+
+function refusal(error: TemplateError): { ok: false; reason: string; unsetVariable?: string } {
+  return error.unsetVariable === undefined
+    ? { ok: false, reason: error.message }
+    : { ok: false, reason: error.message, unsetVariable: error.unsetVariable };
+}
 
 /** One value with its variables substituted, and the names it used that the lookup did not set. */
 export function interpolateComposeValue(
@@ -32,7 +51,7 @@ export function interpolateComposeValue(
   try {
     return { ok: true, value: substitute(template, lookup, missing, 0), missing: [...missing] };
   } catch (error) {
-    if (error instanceof TemplateError) return { ok: false, reason: error.message };
+    if (error instanceof TemplateError) return refusal(error);
     throw error;
   }
 }
@@ -49,7 +68,7 @@ export function interpolateComposeTree(
   try {
     return { ok: true, value: walk(data, '', lookup, missing), missing: [...missing] };
   } catch (error) {
-    if (error instanceof TemplateError) return { ok: false, reason: error.message };
+    if (error instanceof TemplateError) return refusal(error);
     throw error;
   }
 }
@@ -60,7 +79,7 @@ function walk(node: unknown, path: string, lookup: ComposeLookup, missing: Set<s
       return substitute(node, lookup, missing, 0);
     } catch (error) {
       if (error instanceof TemplateError && path) {
-        throw new TemplateError(`${path}: ${error.message}`);
+        throw new TemplateError(`${path}: ${error.message}`, error.unsetVariable);
       }
       throw error;
     }
@@ -181,5 +200,8 @@ function braced(
 }
 
 function required(name: string, message: string): TemplateError {
-  return new TemplateError(message ? `${name} is required: ${message}` : `${name} is required.`);
+  return new TemplateError(
+    message ? `${name} is required: ${message}` : `${name} is required.`,
+    name,
+  );
 }

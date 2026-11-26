@@ -141,11 +141,17 @@ export function EnvironmentPicker({
   projectId,
   environmentId,
   envFileIds,
+  pickOnlyEnvironment = false,
   onChange,
 }: {
   projectId: string;
   environmentId: string | null;
   envFileIds: string[] | null;
+  /**
+   * Picks the project's environment when it has exactly one with files and none is picked yet.
+   * The caller turns it off once anything is picked, so No environment, once chosen, stays.
+   */
+  pickOnlyEnvironment?: boolean;
   onChange: (next: EnvironmentPick) => void;
 }): React.JSX.Element {
   const ids = useId();
@@ -165,6 +171,20 @@ export function EnvironmentPicker({
       onChange({ environmentId, environmentName: environment.name, envFileIds: normalized });
     }
   }, [differs, environment, environmentId, normalized, onChange]);
+
+  // A project with a single environment almost always deploys with it. Starting on No
+  // environment instead fails a compose file that requires its values with a message about .env,
+  // so that one environment is picked for the user, who can still switch it off.
+  const only =
+    pickOnlyEnvironment && environmentId === null && environments.data?.length === 1
+      ? environments.data[0]
+      : undefined;
+  const pickOnly = only && only.files.length > 0 ? only : undefined;
+  useEffect(() => {
+    if (pickOnly) {
+      onChange({ environmentId: pickOnly.id, environmentName: pickOnly.name, envFileIds: null });
+    }
+  }, [pickOnly, onChange]);
 
   function toggle(id: string, on: boolean): void {
     if (!environment) return;

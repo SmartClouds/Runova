@@ -36,6 +36,11 @@ export interface AppWizardDraft {
   reached: number;
   source: WizardSource;
   nameTouched: boolean;
+  /**
+   * Whether the environment was picked for this project already (by the user, or once by the
+   * wizard when the project has a single environment). Until then the wizard may pick it.
+   */
+  environmentTouched: boolean;
   /** Undefined until the first preview says which services stay private. */
   proxied: string[] | undefined;
   acknowledged: ReadonlySet<string>;
@@ -95,6 +100,7 @@ export function emptyDraft(overrides: Partial<AppWizardDraft> = {}): AppWizardDr
       release: null,
     },
     nameTouched: false,
+    environmentTouched: false,
     proxied: undefined,
     acknowledged: new Set(),
     serverAcknowledged: new Set(),

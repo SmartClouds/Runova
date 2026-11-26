@@ -121,6 +121,16 @@ describe('interpolateComposeTree', () => {
     expect(result).toEqual({
       ok: false,
       reason: 'services.web.environment.A: NEEDED is required: set it',
+      unsetVariable: 'NEEDED',
     });
+  });
+
+  it('names no unset variable when the value itself is broken', () => {
+    const result = interpolateComposeTree(
+      { services: { web: { image: 'nginx:${TAG' } } },
+      () => undefined,
+    );
+    expect(result.ok).toBe(false);
+    expect(result).not.toHaveProperty('unsetVariable');
   });
 });

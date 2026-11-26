@@ -52,7 +52,13 @@ export interface ComposeParseOptions {
 
 export type ComposeParse =
   | { ok: true; project: ComposeProject }
-  | { ok: false; reason: string; line?: number };
+  | {
+      ok: false;
+      reason: string;
+      line?: number;
+      /** A required `${NAME:?...}` the environment left unset: the file is fine, a value is missing. */
+      unsetVariable?: string;
+    };
 
 const refuse = (reason: string, line?: number): ComposeParse =>
   line === undefined ? { ok: false, reason } : { ok: false, reason, line };
@@ -172,7 +178,11 @@ export function parseComposeFile(text: string, options: ComposeParseOptions = {}
     const result = interpolateComposeTree(data, (name) =>
       Object.hasOwn(environment, name) ? environment[name] : undefined,
     );
-    if (!result.ok) return refuse(result.reason);
+    if (!result.ok) {
+      return result.unsetVariable === undefined
+        ? refuse(result.reason)
+        : { ok: false, reason: result.reason, unsetVariable: result.unsetVariable };
+    }
     if (!isRecord(result.value)) return refuse('The compose file could not be interpolated.');
     data = result.value;
     interpolated = true;

@@ -211,6 +211,7 @@ export function NewAppWizard({
       emptyDraft({
         source: initialSource(serverId, existing),
         nameTouched: existing !== undefined,
+        environmentTouched: existing !== undefined,
         // Deploying again starts from what the app runs now; a new app from the preview's default.
         proxied: existing?.revisions[0]?.proxiedServices,
       }),
@@ -220,7 +221,16 @@ export function NewAppWizard({
   const draft = kept?.draft ?? fresh;
   const run: AppRun = kept?.run ?? IDLE;
   const progress = kept?.progress ?? null;
-  const { step, reached, source, nameTouched, proxied, acknowledged, serverAcknowledged } = draft;
+  const {
+    step,
+    reached,
+    source,
+    nameTouched,
+    environmentTouched,
+    proxied,
+    acknowledged,
+    serverAcknowledged,
+  } = draft;
   const apps = useStacks(serverId, access.signedIn && !existing);
 
   /** Changes the draft from its latest state, keeping it from here on. */
@@ -325,8 +335,17 @@ export function NewAppWizard({
         merged.name = suggestAppName(merged.projectName || folderName(merged.projectFolder));
       }
       const reset = next.projectId !== undefined || next.composePath !== undefined;
+      // Another project starts with no environment, which the picker may fill in again; any
+      // pick of an environment after that is final.
+      const environmentTouched =
+        next.projectId !== undefined
+          ? false
+          : next.environmentId !== undefined
+            ? true
+            : current.environmentTouched;
       return {
         source: merged,
+        environmentTouched,
         ...(touchedName ? { nameTouched: true } : {}),
         ...(reset ? { proxied: undefined, acknowledged: new Set<string>(), reached: 0 } : {}),
       };
@@ -388,6 +407,7 @@ export function NewAppWizard({
         source={source}
         nameProblem={nameProblem}
         nameLocked={existing !== undefined}
+        pickOnlyEnvironment={!environmentTouched}
         onChange={change}
       />
     );

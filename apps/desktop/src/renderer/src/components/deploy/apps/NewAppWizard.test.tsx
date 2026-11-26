@@ -229,6 +229,59 @@ describe('NewAppWizard env files', () => {
     expect(screen.queryByRole('list', { name: 'Env files' })).not.toBeInTheDocument();
   });
 
+  describe('a project with a single environment', () => {
+    const [production] = appsBridge()['environments.list'] as unknown[];
+    const onlyProduction = { 'environments.list': [production] };
+
+    async function toConfigure(user: ReturnType<typeof renderWizard>['user']) {
+      await user.click(screen.getByRole('button', { name: /Next/ }));
+      await screen.findByRole('list', { name: 'Services to deploy' });
+    }
+
+    it('picks it, so its values reach the preview', async () => {
+      const { user, bridge } = renderWizard(onlyProduction);
+      await pickProject(user);
+      await user.click(await screen.findByRole('radio', { name: /compose\.yaml/ }));
+      expect(await screen.findByRole('checkbox', { name: '.env.production' })).toBeChecked();
+      await toConfigure(user);
+      expect(lastPreview(bridge)).toMatchObject({ environmentId: 'env-1' });
+    });
+
+    it('keeps No environment once the user picks it', async () => {
+      const { user, bridge } = renderWizard(onlyProduction);
+      await pickProject(user);
+      await user.click(await screen.findByRole('radio', { name: /compose\.yaml/ }));
+      await screen.findByRole('list', { name: 'Env files' });
+      await pickEnvironment(user, 'No environment');
+      expect(screen.queryByRole('list', { name: 'Env files' })).not.toBeInTheDocument();
+      await toConfigure(user);
+      expect(lastPreview(bridge)).toMatchObject({ environmentId: null });
+    });
+
+    it('leaves a project with several environments on No environment', async () => {
+      const { user, bridge } = renderWizard();
+      await pickProject(user);
+      await user.click(await screen.findByRole('radio', { name: /compose\.yaml/ }));
+      await waitFor(() =>
+        expect(screen.getByRole('combobox', { name: 'Environment' })).toBeEnabled(),
+      );
+      expect(screen.queryByRole('list', { name: 'Env files' })).not.toBeInTheDocument();
+      await toConfigure(user);
+      expect(lastPreview(bridge)).toMatchObject({ environmentId: null });
+    });
+
+    it('leaves an app deployed again without an environment as it was', async () => {
+      const details = sampleDetails();
+      const { environmentId: _id, environmentName: _name, ...source } = details.stack.source!;
+      const existing = { ...details, stack: { ...details.stack, source } };
+      renderWizard(onlyProduction, { existing });
+      await waitFor(() =>
+        expect(screen.getByRole('combobox', { name: 'Environment' })).toBeEnabled(),
+      );
+      expect(screen.queryByRole('list', { name: 'Env files' })).not.toBeInTheDocument();
+    });
+  });
+
   it('starts from every file again when another environment or project is picked', async () => {
     const { user } = renderWizard();
     await pickStaging(user);

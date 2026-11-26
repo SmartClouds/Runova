@@ -376,10 +376,13 @@ export function previewFromSource(
     environment: Object.fromEntries(entries.map((entry) => [entry.key, entry.value])),
   });
   if (!parsed.ok) {
+    const reason = parsed.line ? `Line ${parsed.line}: ${parsed.reason}` : parsed.reason;
     return {
       ...empty,
       envText: env.text,
-      blocking: parsed.line ? `Line ${parsed.line}: ${parsed.reason}` : parsed.reason,
+      blocking: parsed.unsetVariable
+        ? unsetVariableReason(reason, parsed.unsetVariable, source.environment)
+        : reason,
     };
   }
   const { project } = parsed;
@@ -428,6 +431,27 @@ export function previewFromSource(
     envText: env.text,
     project,
   };
+}
+
+/**
+ * A required variable with no value, said in terms of what the user picked. The compose file's
+ * own message usually says to set it in .env, but Runova only sends the environment picked in
+ * the wizard, never the .env files in the project folder, so the fix is in that pick.
+ */
+function unsetVariableReason(
+  reason: string,
+  name: string,
+  environment: ResolvedProjectEnvironment | null,
+): string {
+  const sentence = /[.!?]$/.test(reason) ? reason : `${reason}.`;
+  if (!environment) {
+    return `${sentence} No environment is picked for this app, so nothing sets ${name}. Go back to Source and pick the environment that holds your .env values.`;
+  }
+  if (environment.files.length === 0) {
+    return `${sentence} The environment ${environment.name} has no files yet, so nothing sets ${name}. Add your .env file to it in the project's Environments tab.`;
+  }
+  const files = environment.files.map((file) => file.fileName).join(', ');
+  return `${sentence} The env files picked from ${environment.name} (${files}) do not set ${name}. Add it in the project's Environments tab, or tick the file that has it.`;
 }
 
 /** Every finding but the low ones waits for its own acknowledgment. */

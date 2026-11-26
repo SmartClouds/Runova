@@ -22,6 +22,7 @@ export function SourceStep({
   source,
   nameProblem,
   nameLocked,
+  pickOnlyEnvironment = false,
   onChange,
 }: {
   serverId: string;
@@ -31,6 +32,8 @@ export function SourceStep({
   nameProblem: string | null;
   /** Deploying again keeps the app's name. */
   nameLocked: boolean;
+  /** Pick the project's environment when it has just one, until something is picked. */
+  pickOnlyEnvironment?: boolean;
   onChange: (next: Partial<WizardSource>, touchedName?: boolean) => void;
 }): React.JSX.Element {
   const ids = useId();
@@ -82,6 +85,7 @@ export function SourceStep({
           projectId={source.projectId}
           environmentId={source.environmentId}
           envFileIds={source.envFileIds}
+          pickOnlyEnvironment={pickOnlyEnvironment}
           onChange={onChange}
         />
       )}

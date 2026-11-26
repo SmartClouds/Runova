@@ -137,8 +137,10 @@ describe('parseComposeFile', () => {
       ports: ['8080:80', ':9000'],
     });
     expect(resolved.missingVariables).toEqual(['ADMIN']);
-    expect(refusal('services:\n  web:\n    image: ${IMAGE:?pick an image}\n', {}).reason).toBe(
-      'services.web.image: IMAGE is required: pick an image',
-    );
+    expect(refusal('services:\n  web:\n    image: ${IMAGE:?pick an image}\n', {})).toEqual({
+      ok: false,
+      reason: 'services.web.image: IMAGE is required: pick an image',
+      unsetVariable: 'IMAGE',
+    });
   });
 });
