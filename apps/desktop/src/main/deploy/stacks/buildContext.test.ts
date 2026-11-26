@@ -295,4 +295,30 @@ describe('buildContextTarball with only (E105)', () => {
     const paths = (await listed(output)).map((entry) => entry.path.replace(/\/$/, '')).sort();
     expect(paths).toEqual(['secrets', 'secrets/key.txt']);
   });
+
+  // tar used to get an empty list here and throw "no paths specified to add to archive".
+  it('says so, naming the paths, when none of them is there, and writes nothing', async () => {
+    const { root, output } = project({ 'compose.yaml': 'services: {}\n' });
+
+    const error = await refusal(
+      buildContextTarball({ root, output, only: ['data', 'nginx.conf', 'missing.env'] }),
+    );
+
+    expect(error.code).toBe('empty');
+    expect(error.message).toContain('data, nginx.conf and missing.env');
+    expect(error.message).not.toMatch(/no paths specified/);
+    expect(existsSync(output)).toBe(false);
+  });
+});
+
+describe('buildContextTarball with nothing to pack', () => {
+  it('refuses an empty folder with its own error instead of the tar one', async () => {
+    const { root, output } = project({});
+
+    const error = await refusal(buildContextTarball({ root, output }));
+
+    expect(error.code).toBe('empty');
+    expect(error.message).toContain(root);
+    expect(existsSync(output)).toBe(false);
+  });
 });

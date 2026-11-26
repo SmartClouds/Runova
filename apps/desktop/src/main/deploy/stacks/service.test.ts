@@ -14,7 +14,12 @@ import type { ICoreHub } from '../../../shared/deploy/protocol/generated/TypedSi
 import type { DeployStackUploadProgress } from '../../../shared/deployStacksTypes';
 import { tempDir } from '../../../test/main/fixtures';
 import { type CoreHttpClient, CoreHttpError } from '../connection/coreHttp';
-import type { BuildContextOptions } from './buildContext';
+import {
+  BuildContextError,
+  type BuildContextOptions,
+  type BuildContextResult,
+  buildContextTarball,
+} from './buildContext';
 import { DeployStacks } from './service';
 
 /**
@@ -166,7 +171,7 @@ function harness(
       },
     ),
   } as unknown as CoreHttpClient;
-  const pack = vi.fn(async (options: BuildContextOptions) => {
+  const pack = vi.fn(async (options: BuildContextOptions): Promise<BuildContextResult> => {
     writeFileSync(options.output, 'packed-context');
     return {
       path: options.output,
@@ -396,6 +401,62 @@ describe('DeployStacks.create', () => {
     );
     expect(calls.posts[0].body).toMatchObject({ buildContext: true, imageSource: 'registry' });
     expect(calls.puts).toHaveLength(1);
+  });
+
+  // With the real packer, a compose file whose relative paths all live only on the server used
+  // to fail with tar's "no paths specified to add to archive".
+  it('deploys with no archive when none of the files the compose file reads is here', async () => {
+    const { stacks, calls, pack } = harness({
+      'compose.yaml': `services:
+  web:
+    image: ghcr.io/acme/web:1.0
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "true"]
+    volumes:
+      - ./data:/var/lib/web
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+`,
+    });
+    pack.mockImplementation(buildContextTarball);
+
+    await stacks.create({ ...CREATE, proxiedServices: [] });
+
+    expect(pack).toHaveBeenCalledWith(expect.objectContaining({ only: ['data', 'nginx.conf'] }));
+    expect(calls.posts[0].body).toMatchObject({ buildContext: false, imageSource: 'registry' });
+    expect(calls.puts).toEqual([]);
+  });
+
+  it('still sends the files that are here when only some are missing', async () => {
+    const { stacks, calls, pack } = harness({
+      'compose.yaml': `services:
+  web:
+    image: ghcr.io/acme/web:1.0
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "true"]
+    volumes:
+      - ./data:/var/lib/web
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+`,
+      'nginx.conf': 'events {}\n',
+    });
+    pack.mockImplementation(buildContextTarball);
+
+    await stacks.create({ ...CREATE, proxiedServices: [] });
+
+    expect(calls.posts[0].body).toMatchObject({ buildContext: true, imageSource: 'registry' });
+    expect(calls.puts).toHaveLength(1);
+  });
+
+  it('passes on any other packing failure instead of deploying without the files', async () => {
+    const { stacks, calls, pack } = harness({ 'compose.yaml': MOUNTS, 'nginx.conf': 'x' });
+    pack.mockRejectedValueOnce(
+      new BuildContextError('nginx.conf is a link outside', 'link-outside'),
+    );
+
+    await expect(stacks.create({ ...CREATE, proxiedServices: [] })).rejects.toThrow('link outside');
+    expect(calls.posts).toEqual([]);
   });
 
   it('refuses project files that add up to more than configuration, pointing at a local deploy', async () => {

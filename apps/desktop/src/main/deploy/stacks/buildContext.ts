@@ -28,7 +28,8 @@ export type BuildContextErrorCode =
   | 'link-outside'
   | 'ignore-file'
   | 'output-inside'
-  | 'not-a-folder';
+  | 'not-a-folder'
+  | 'empty';
 
 export class BuildContextError extends Error {
   constructor(
@@ -270,6 +271,18 @@ export async function buildContextTarball(
       `The build context is ${describeBytes(walked.bytes)}, more than the ${describeBytes(maxBytes)} the server accepts. The largest parts are ${parts}. Add the ones the build does not need to .dockerignore.`,
       'too-large',
       largest,
+    );
+  }
+
+  // tar refuses an empty list with "no paths specified to add to archive", which tells the user
+  // nothing. It happens when every path `only` names is missing here, or the folder is empty
+  // (the ignore file always goes in, so .dockerignore alone cannot empty the list).
+  if (walked.paths.length === 0) {
+    throw new BuildContextError(
+      only
+        ? `None of the files the compose file reads (${listNames(only)}) are in ${options.root}, so there is nothing to send with it.`
+        : `${options.root} is empty, so there is nothing to pack.`,
+      'empty',
     );
   }
 

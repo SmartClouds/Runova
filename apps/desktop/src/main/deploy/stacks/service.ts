@@ -44,7 +44,11 @@ import { ADMIN_ROLES, callCore } from '../coreCalls';
 import type { CoreLinks } from '../live/coreLinks';
 import { type ComposeRegistries, registriesOfCompose } from '../registry/images';
 import { explainCoreRefusal } from '../system';
-import type { BuildContextOptions, BuildContextResult } from './buildContext';
+import {
+  BuildContextError,
+  type BuildContextOptions,
+  type BuildContextResult,
+} from './buildContext';
 import {
   discoverComposeFiles,
   dockerfilesOf,
@@ -516,8 +520,14 @@ export class DeployStacks {
   /**
    * The files a compose file reads, packed alone for a registry or release deploy. Configuration
    * is small; more than PROJECT_FILES_LIMIT is data or a build, which a local deploy shows first.
+   * A path missing here is left out (Docker makes a missing bind folder itself), and when none
+   * of them is here there is no archive at all (null).
    */
-  private async packProjectFiles(serverId: string, root: string, files: string[]) {
+  private async packProjectFiles(
+    serverId: string,
+    root: string,
+    files: string[],
+  ): Promise<{ folder: string; packed: BuildContextResult } | null> {
     this.progress(serverId, 'packing');
     const folder = await mkdtemp(join(this.deps.tempRoot?.() ?? tmpdir(), 'runova-context-'));
     try {
@@ -534,6 +544,7 @@ export class DeployStacks {
       return { folder, packed };
     } catch (error) {
       await rm(folder, { recursive: true, force: true });
+      if (error instanceof BuildContextError && error.code === 'empty') return null;
       throw error;
     }
   }
