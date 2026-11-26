@@ -182,6 +182,7 @@ export function SitesPanel({ server }: { server: DeployServer }): React.JSX.Elem
             onInstall={() => void install()}
           />
           <SitesCard
+            serverId={server.id}
             sites={sites.data}
             loading={sites.isPending}
             error={sites.error ? coreErrorMessage(sites.error) : null}
@@ -189,6 +190,7 @@ export function SitesPanel({ server }: { server: DeployServer }): React.JSX.Elem
             managed={managed}
             onOpen={(siteId, tab) => setEditing({ siteId, tab })}
             onAdd={() => setEditing({ siteId: null, tab: 'domains' })}
+            onSaved={refresh}
           />
           <StreamProxiesCard
             serverId={server.id}

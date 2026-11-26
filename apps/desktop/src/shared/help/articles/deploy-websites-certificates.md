@@ -49,10 +49,21 @@ If the nginx build has no stream module, the card says so, and TCP and UDP proxi
 The **Websites** card lists every site as a route map, from left to right:
 
 1. The **domain** (with a count such as +2 when the site has more names), a lock and the certificate state, for example "SSL, 62 days", "No SSL", "Expired" or "Revoked". Click it to open the SSL tab.
-2. **nginx**, with small chips for what it does on the way: cache, websocket, gzip, https only, password, ip allowlist, rate limit, custom. Click it to open the Performance tab.
+2. **nginx**, with small chips for what it does on the way: cache, gzip, https only, password, ip allowlist, rate limit, custom. Click it to open the Performance tab.
 3. The **upstream**, where requests go (for example `web:3000` or `http://10.0.0.5:8080`). Click it to open the Proxy tab.
 
-Each row also says **Live** or **Not applied yet**, and has an **Edit** (or **View**) button that opens the site editor on the Domains tab. When there are no sites the card says "No sites yet. Add one to put an app on a domain."
+Each row also has a **WebSockets** switch, says **Live** or **Not applied yet**, and has an **Edit** (or **View**) button that opens the site editor on the Domains tab. When there are no sites the card says "No sites yet. Add one to put an app on a domain."
+
+### Turn WebSockets on or off
+
+Apps with live connections (chat, live dashboards, hot reload, anything built on Socket.IO or SignalR) need nginx to pass WebSocket upgrades through. Each site that forwards to an app has a **WebSockets** switch on its row, so you can turn this on or off for that site alone without opening the editor.
+
+- Flip the switch (Admins only). The site is saved at once and the toast says so, for example "WebSockets on for app.example.com. Apply to put it live."
+- The row then says **Not applied yet** and the Apply bar appears. Click **Apply changes** to put it live, together with any other saved changes.
+- If the server refuses the change, the switch goes back and the toast says why.
+- Sites that only redirect have no switch, since no request reaches an app. Viewers see the switch but cannot change it.
+
+With WebSockets on, nginx adds the `Upgrade` and `Connection` headers the app needs and keeps an idle connection open for an hour instead of nginx's 60 seconds (unless you set your own read and send timeouts under **Limits** on the Performance tab). The same setting is under **Connections** on the site editor's Proxy tab.
 
 ### Add a site
 

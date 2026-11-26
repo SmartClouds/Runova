@@ -114,9 +114,21 @@ test('sets up nginx, adds a site, applies it and issues a certificate', async ()
     .getByRole('list', { name: 'Sites' })
     .getByRole('listitem', { name: 'shop.example.com' });
   await expect(row.getByText(/^SSL, (89|90) days$/)).toBeVisible({ timeout: 30_000 });
-  await expect(row.getByText('websocket')).toBeVisible();
+  const websockets = row.getByRole('switch', { name: 'WebSockets for shop.example.com' });
+  await expect(websockets).toBeChecked();
   await expect(row.getByText('shop:3000')).toBeVisible();
   await expect(row.getByText('Live')).toBeVisible({ timeout: 30_000 });
+
+  // WebSockets off straight from the row: saved at once, live after Apply.
+  await websockets.click();
+  await expect(
+    page.getByText('WebSockets off for shop.example.com. Apply to put it live.'),
+  ).toBeVisible({ timeout: 30_000 });
+  await expect(websockets).not.toBeChecked();
+  await expect(row.getByText('Not applied yet')).toBeVisible({ timeout: 30_000 });
+  await apply(page);
+  await expect(row.getByText('Live')).toBeVisible({ timeout: 30_000 });
+  await expect(websockets).not.toBeChecked();
 });
 
 test('redirects www to the bare domain, and an old domain to a new address', async () => {
