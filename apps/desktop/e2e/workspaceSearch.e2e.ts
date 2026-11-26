@@ -61,6 +61,10 @@ test('finds text and declarations, and opens the result at its line', async () =
   await page.keyboard.press('Enter');
   await expect(input).toBeHidden();
   await expect(page.getByText('store.ts').first()).toBeVisible();
+  // The editor takes focus once the file has loaded and the declaration is revealed. On a busy
+  // machine that comes well after the tab shows, and if it lands while the search is open again
+  // it pulls focus out of the box, so wait for it as a person would see the cursor in the file.
+  await expect(page.locator('.monaco-editor.focused')).toBeVisible();
 
   // The next opening starts with the file that was just opened.
   await openSearch(page);
