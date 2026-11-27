@@ -28,7 +28,7 @@ internal sealed record CloudflareTunnelOptions(
     bool RunInBackground = true)
 {
     public static CloudflareTunnelOptions Default { get; } =
-        new(TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(5), TimeSpan.FromSeconds(60));
+        new(TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(3));
 }
 
 /// <summary>

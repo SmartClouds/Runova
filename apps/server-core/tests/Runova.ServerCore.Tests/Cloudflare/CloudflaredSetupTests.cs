@@ -182,9 +182,11 @@ public sealed class CloudflaredSetupTests
         Assert.Contains("ProtectSystem=strict\n", unit, StringComparison.Ordinal);
         Assert.Contains("CapabilityBoundingSet=\n", unit, StringComparison.Ordinal);
         Assert.Contains("Restart=always\n", unit, StringComparison.Ordinal);
+        // No start timeout: with QUIC blocked, cloudflared needs over a minute to fall back to HTTP/2.
+        Assert.Contains("TimeoutStartSec=0\n", unit, StringComparison.Ordinal);
         Assert.Contains(processes.Calls, spec => FakeProcessRunner.Is(spec, "systemctl", "daemon-reload"));
         Assert.Contains(processes.Calls, spec => FakeProcessRunner.Is(spec, "systemctl", "enable", LinuxCloudflared.UnitName));
-        Assert.Contains(processes.Calls, spec => FakeProcessRunner.Is(spec, "systemctl", "restart", LinuxCloudflared.UnitName));
+        Assert.Contains(processes.Calls, spec => FakeProcessRunner.Is(spec, "systemctl", "--no-block", "restart", LinuxCloudflared.UnitName));
         Assert.DoesNotContain(processes.Calls, spec => spec.Arguments.Any(argument => argument.Contains(token, StringComparison.Ordinal)));
         Assert.DoesNotContain(processes.Calls, spec => spec.Environment.Values.Any(value => value.Contains(token, StringComparison.Ordinal)));
     }
@@ -209,7 +211,7 @@ public sealed class CloudflaredSetupTests
     {
         using var root = Ubuntu();
         var processes = new FakeProcessRunner();
-        processes.Respond("systemctl", ["restart"], _ => FakeProcessRunner.Exit(1, error: "Job for runova-cloudflared.service failed."));
+        processes.Respond("systemctl", ["--no-block", "restart"], _ => FakeProcessRunner.Exit(1, error: "Job for runova-cloudflared.service failed."));
 
         var failure = await Assert.ThrowsAsync<CloudflareTunnelException>(() => Setup(root, processes, new Keys(string.Empty)).StartAsync(Token(), 20241, Cancel));
 

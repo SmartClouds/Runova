@@ -86,7 +86,7 @@ internal sealed class LinuxCloudflared(
         ExecStart={Binary} --no-autoupdate tunnel --metrics 127.0.0.1:{metricsPort.ToString(CultureInfo.InvariantCulture)} run
         Restart=always
         RestartSec=5s
-        TimeoutStartSec=60s
+        TimeoutStartSec=0
         DynamicUser=yes
         NoNewPrivileges=yes
         CapabilityBoundingSet=
@@ -177,7 +177,11 @@ internal sealed class LinuxCloudflared(
         files.WriteText(UnitPath, UnitText(metricsPort), Readable);
         await SystemctlAsync(["daemon-reload"], "systemd did not take the tunnel's unit", cancellationToken);
         await SystemctlAsync(["enable", UnitName], "The tunnel's unit could not be enabled at boot", cancellationToken);
-        await SystemctlAsync(["restart", UnitName], "cloudflared did not start", cancellationToken);
+        // cloudflared tells systemd it is ready only once it holds a connection to Cloudflare. Where
+        // outbound UDP 7844 is blocked it first spends a minute or more on QUIC before it falls back to
+        // HTTP/2, so the unit has no start timeout (a 60 s one killed it mid-fallback, over and over)
+        // and the restart does not wait. The setup job waits for /ready on its own clock instead.
+        await SystemctlAsync(["--no-block", "restart", UnitName], "cloudflared did not start", cancellationToken);
     }
 
     public async Task StopAsync(CancellationToken cancellationToken)
