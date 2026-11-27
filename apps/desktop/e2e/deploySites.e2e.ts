@@ -89,7 +89,10 @@ test('sets up nginx, adds a site, applies it and issues a certificate', async ()
   await page.getByRole('tab', { name: 'Proxy' }).click();
   await page.getByLabel('Service name').fill('shop');
   await page.getByLabel('Port').fill('3000');
-  await page.getByRole('switch', { name: 'WebSockets' }).click();
+  // A new site starts with WebSockets off; turn them on for this one.
+  const websockets = page.getByRole('switch', { name: 'WebSockets' });
+  await expect(websockets).not.toBeChecked();
+  await websockets.click();
   await page.getByRole('button', { name: /Save the site/ }).click();
   await expect(page.getByRole('tab', { name: 'SSL', selected: true })).toBeVisible({
     timeout: 30_000,
@@ -114,21 +117,22 @@ test('sets up nginx, adds a site, applies it and issues a certificate', async ()
     .getByRole('list', { name: 'Sites' })
     .getByRole('listitem', { name: 'shop.example.com' });
   await expect(row.getByText(/^SSL, (89|90) days$/)).toBeVisible({ timeout: 30_000 });
-  const websockets = row.getByRole('switch', { name: 'WebSockets for shop.example.com' });
-  await expect(websockets).toBeChecked();
+  // The row has no switch, only a chip saying WebSockets are on.
+  await expect(row.getByRole('switch')).toHaveCount(0);
+  await expect(row.getByText('websockets', { exact: true })).toBeVisible();
   await expect(row.getByText('shop:3000')).toBeVisible();
   await expect(row.getByText('Live')).toBeVisible({ timeout: 30_000 });
 
-  // WebSockets off straight from the row: saved at once, live after Apply.
+  // WebSockets off from the editor's Proxy tab: saved, then live after Apply.
+  await row.getByRole('button', { name: 'Edit shop.example.com' }).click();
+  await page.getByRole('tab', { name: 'Proxy' }).click();
+  await expect(websockets).toBeChecked();
   await websockets.click();
-  await expect(
-    page.getByText('WebSockets off for shop.example.com. Apply to put it live.'),
-  ).toBeVisible({ timeout: 30_000 });
-  await expect(websockets).not.toBeChecked();
-  await expect(row.getByText('Not applied yet')).toBeVisible({ timeout: 30_000 });
+  await page.getByRole('button', { name: /Save changes/ }).click();
   await apply(page);
+  await page.getByRole('button', { name: /All sites/ }).click();
   await expect(row.getByText('Live')).toBeVisible({ timeout: 30_000 });
-  await expect(websockets).not.toBeChecked();
+  await expect(row.getByText('websockets', { exact: true })).toHaveCount(0);
 });
 
 test('redirects www to the bare domain, and an old domain to a new address', async () => {

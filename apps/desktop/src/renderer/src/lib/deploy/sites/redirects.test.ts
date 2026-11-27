@@ -298,4 +298,15 @@ describe('the route map', () => {
     ).toEqual(['redirect 301']);
     expect(siteChips(APEX)).toEqual(['https only', '1 redirected']);
   });
+
+  it('says so when a site lets WebSockets through, now that the row has no switch for it', () => {
+    expect(siteChips({ ...APEX, settings: { ...APEX.settings, websocket: true } })).toEqual([
+      'websockets',
+      'https only',
+      '1 redirected',
+    ]);
+    expect(siteChips({ ...MOVED, settings: { ...MOVED.settings, websocket: true } })).toEqual([
+      'redirect 302',
+    ]);
+  });
 });

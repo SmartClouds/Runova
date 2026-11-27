@@ -50,14 +50,28 @@ describe('ProxyRouteDialog', () => {
     expect(() => bridge.$fn('deploySites.save')).toThrow();
   });
 
-  it('skips the certificate and WebSocket when they are switched off', async () => {
+  it('starts with WebSockets off and lets them be turned on', async () => {
+    const { user, bridge, dialog } = renderDialog({
+      'deploySites.save': SAVED,
+      'deploySites.applyChanges': APPLIED,
+      'deployCerts.issue': { id: 'job-cert' },
+    });
+    const websockets = within(dialog).getByRole('switch', { name: 'WebSockets' });
+    expect(websockets).not.toBeChecked();
+    await user.click(websockets);
+    await user.type(within(dialog).getByLabelText('Domain'), 'api.example.com');
+    await user.click(within(dialog).getByRole('button', { name: 'Add the domain' }));
+    await within(dialog).findByText(/api\.example\.com is set up/);
+    expect(bridge.$fn('deploySites.save').mock.calls[0][1]).toMatchObject({ websocket: true });
+  });
+
+  it('skips the certificate when it is switched off, and leaves WebSockets off', async () => {
     const { user, bridge, dialog } = renderDialog({
       'deploySites.save': SAVED,
       'deploySites.applyChanges': APPLIED,
     });
     await user.type(within(dialog).getByLabelText('Domain'), 'api.example.com');
     await user.click(within(dialog).getByRole('switch', { name: 'Get an HTTPS certificate' }));
-    await user.click(within(dialog).getByRole('switch', { name: 'WebSocket' }));
     await user.click(within(dialog).getByRole('button', { name: 'Add the domain' }));
     const steps = await within(dialog).findByRole('list', { name: 'Steps' });
     expect(

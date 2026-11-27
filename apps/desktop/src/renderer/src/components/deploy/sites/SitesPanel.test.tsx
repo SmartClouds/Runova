@@ -2,7 +2,7 @@ import { act, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { ConfirmDialogHost } from '@/components/ConfirmDialog';
 import { renderWithProviders } from '../../../../../test/renderer/renderWithProviders';
-import { job, nginxStatus, POSTGRES, SERVER, SHOP, site, sitesBridge } from './testing/fixtures';
+import { job, nginxStatus, POSTGRES, SERVER, sitesBridge } from './testing/fixtures';
 
 /**
  * The Websites section in the renderer: what each role sees of nginx, the sites as routes, the
@@ -333,132 +333,14 @@ describe('SitesPanel from Cloudflare', () => {
   });
 });
 
-describe('SitesPanel WebSockets switch', () => {
-  function shopRow() {
-    return screen.findByRole('listitem', { name: 'shop.example.com' });
-  }
-
-  it('shows on each row whether the site lets WebSockets through', async () => {
+describe('SitesPanel WebSockets on a row', () => {
+  it('has no switch on the row, only a chip when the site lets WebSockets through', async () => {
     renderPanel();
     const blog = await screen.findByRole('listitem', { name: 'blog.example.com' });
-    const on = within(blog).getByRole('switch', { name: 'WebSockets for blog.example.com' });
-    expect(on).toBeChecked();
-    expect(on).toBeEnabled();
-    expect(within(blog).getByText('WebSockets')).toBeInTheDocument();
-    const off = within(await shopRow()).getByRole('switch', {
-      name: 'WebSockets for shop.example.com',
-    });
-    expect(off).not.toBeChecked();
-    // The switch says it already, so the nginx stop no longer repeats it as a chip.
-    expect(within(blog).queryByText('websocket')).toBeNull();
-    // Its hint keeps clear of "live", which the row's Live chip owns (e2e matches by substring).
-    expect(within(blog).getAllByText(/live/i)).toHaveLength(1);
-  });
-
-  it('has no switch on a site that only redirects', async () => {
-    renderPanel({
-      'deploySites.list': [
-        site(
-          {},
-          {
-            id: 'old',
-            domains: ['old.example.com'],
-            websocket: false,
-            proxyCache: undefined,
-            upstream: {
-              kind: 'redirect',
-              address: 'https://new.example.com',
-              permanent: true,
-              keepPath: true,
-              verifyCertificate: true,
-              sendUpstreamHost: false,
-            },
-          },
-        ),
-      ],
-    });
-    const old = await screen.findByRole('listitem', { name: 'old.example.com' });
-    expect(within(old).queryByRole('switch')).toBeNull();
-  });
-
-  it('shows a Viewer the switch without letting them change it', async () => {
-    renderPanel({}, ['viewer']);
-    const blog = await screen.findByRole('listitem', { name: 'blog.example.com' });
-    expect(within(blog).getByRole('switch', { name: /WebSockets for/ })).toBeDisabled();
-  });
-
-  it('saves the change at once and says that Apply puts it live', async () => {
-    const { bridge, user } = renderPanel();
-    bridge.$set('deploySites.save', async (_server: string, settings: typeof SHOP.settings) => {
-      const saved = { ...SHOP, settings, applied: false };
-      bridge.$set('deploySites.list', [site(), saved]);
-      bridge.$set('deploySites.status', nginxStatus({ pendingChanges: true }));
-      return { problems: [], site: saved };
-    });
-    const row = await shopRow();
-    await user.click(within(row).getByRole('switch', { name: 'WebSockets for shop.example.com' }));
-
-    expect(bridge.$fn('deploySites.save')).toHaveBeenCalledWith(SERVER.id, {
-      ...SHOP.settings,
-      websocket: true,
-    });
-    await waitFor(() =>
-      expect(toast.success).toHaveBeenCalledWith(
-        'WebSockets on for shop.example.com. Apply to put it live.',
-      ),
-    );
-    expect(await screen.findByRole('region', { name: 'Apply changes' })).toBeInTheDocument();
-    expect(within(await shopRow()).getByRole('switch', { name: /WebSockets for/ })).toBeChecked();
-  });
-
-  it('says so when it turns WebSockets off', async () => {
-    const { bridge, user } = renderPanel({
-      'deploySites.save': async (_server: string, settings: typeof SHOP.settings) => ({
-        problems: [],
-        site: site({ applied: false }, settings),
-      }),
-    });
-    const blog = await screen.findByRole('listitem', { name: 'blog.example.com' });
-    await user.click(within(blog).getByRole('switch', { name: /WebSockets for/ }));
-    expect(bridge.$fn('deploySites.save').mock.calls[0][1].websocket).toBe(false);
-    await waitFor(() =>
-      expect(toast.success).toHaveBeenCalledWith(
-        'WebSockets off for blog.example.com. Apply to put it live.',
-      ),
-    );
-  });
-
-  it('holds the switch in its new place while it saves', async () => {
-    const { user } = renderPanel({ 'deploySites.save': () => new Promise(() => undefined) });
-    const toggle = within(await shopRow()).getByRole('switch', { name: /WebSockets for/ });
-    await user.click(toggle);
-    expect(toggle).toBeChecked();
-    expect(toggle).toBeDisabled();
-    expect(toggle).toHaveAttribute('aria-busy', 'true');
-  });
-
-  it('puts the switch back and says why when the core refuses the change', async () => {
-    const { user } = renderPanel({
-      'deploySites.save': async () => ({
-        problems: [{ field: 'websocket', message: 'The site is locked by another change.' }],
-      }),
-    });
-    const toggle = within(await shopRow()).getByRole('switch', { name: /WebSockets for/ });
-    await user.click(toggle);
-    await waitFor(() =>
-      expect(toast.error).toHaveBeenCalledWith('The site is locked by another change.'),
-    );
-    expect(toggle).not.toBeChecked();
-    expect(toggle).toBeEnabled();
-  });
-
-  it('puts the switch back when the call fails', async () => {
-    const { user } = renderPanel({
-      'deploySites.save': () => Promise.reject(new Error('The connection dropped.')),
-    });
-    const toggle = within(await shopRow()).getByRole('switch', { name: /WebSockets for/ });
-    await user.click(toggle);
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('The connection dropped.'));
-    expect(toggle).not.toBeChecked();
+    const shop = await screen.findByRole('listitem', { name: 'shop.example.com' });
+    expect(within(blog).queryByRole('switch')).toBeNull();
+    expect(within(shop).queryByRole('switch')).toBeNull();
+    expect(within(blog).getByText('websockets')).toBeInTheDocument();
+    expect(within(shop).queryByText('websockets')).toBeNull();
   });
 });

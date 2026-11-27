@@ -7,10 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SimpleTooltip } from '@/components/ui/tooltip';
 import type { SiteTab } from '@/lib/deploy/sites/problems';
-import { carriesWebsockets } from '@/lib/deploy/sites/websocket';
 import { cn } from '@/lib/utils';
 import { RouteMap } from './RouteMap';
-import { WebsocketSwitch } from './WebsocketSwitch';
 
 /** The reCAPTCHA page with a new key for the site's domains already filled in (E40). */
 function recaptchaLink(site: SiteInfo, label: string): string {
@@ -38,7 +36,6 @@ export function AppliedChip({ applied }: { applied: boolean }): React.JSX.Elemen
 }
 
 export function SitesCard({
-  serverId,
   sites,
   loading,
   error,
@@ -46,9 +43,7 @@ export function SitesCard({
   managed,
   onOpen,
   onAdd,
-  onSaved,
 }: {
-  serverId: string;
   sites: SiteInfo[] | undefined;
   loading: boolean;
   error: string | null;
@@ -57,8 +52,6 @@ export function SitesCard({
   managed: boolean;
   onOpen: (siteId: string, tab: SiteTab) => void;
   onAdd: () => void;
-  /** Reads the sites again after a change made on a row, such as the WebSockets switch. */
-  onSaved: () => Promise<void>;
 }): React.JSX.Element {
   const now = Date.now();
   return (
@@ -120,14 +113,6 @@ export function SitesCard({
                 <div className="min-w-0 flex-1">
                   <RouteMap site={site} now={now} onOpen={(tab) => onOpen(site.settings.id, tab)} />
                 </div>
-                {carriesWebsockets(site) && (
-                  <WebsocketSwitch
-                    serverId={serverId}
-                    site={site}
-                    admin={admin}
-                    onSaved={onSaved}
-                  />
-                )}
                 <AppliedChip applied={site.applied} />
                 {site.settings.domains.length > 0 && (
                   <SimpleTooltip label="Protect with reCAPTCHA">

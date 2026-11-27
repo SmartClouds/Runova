@@ -62,7 +62,7 @@ export function ProxyRouteDialog({
   const kept = useDeployExposeStore((state): ExposeRun | undefined => state.runs[key]);
   const [domain, setDomain] = useState('');
   const [certificate, setCertificate] = useState(true);
-  const [websocket, setWebsocket] = useState(true);
+  const [websocket, setWebsocket] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const phase: Phase = kept?.phase ?? 'form';
   const steps = kept?.steps ?? NO_STEPS;
@@ -76,7 +76,7 @@ export function ProxyRouteDialog({
     const run = useDeployExposeStore.getState().runs[key];
     setDomain(run?.domain ?? '');
     setCertificate(run?.certificate ?? true);
-    setWebsocket(true);
+    setWebsocket(false);
     setError(undefined);
   }, [open]);
 
@@ -167,7 +167,7 @@ export function ProxyRouteDialog({
               onChange={setCertificate}
             />
             <ToggleRow
-              label="WebSocket"
+              label="WebSockets"
               description="Lets live connections through, for apps that push updates."
               checked={websocket}
               onChange={setWebsocket}

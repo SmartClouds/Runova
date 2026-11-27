@@ -21,10 +21,7 @@ export function upstreamLabel(site: SiteInfo): string {
   return `${upstream.service ?? 'local'}:${upstream.port ?? ''}`;
 }
 
-/**
- * What nginx does to the site's traffic, as short words. WebSockets is left out: the row has a
- * switch for it of its own.
- */
+/** What nginx does to the site's traffic, as short words. WebSockets is changed in the editor. */
 export function siteChips(site: SiteInfo): string[] {
   const s = site.settings;
   if (s.upstream.kind === 'redirect') {
@@ -34,6 +31,7 @@ export function siteChips(site: SiteInfo): string[] {
   return [
     s.proxyCache ? 'cache' : null,
     s.gzip ? 'gzip' : null,
+    s.websocket ? 'websockets' : null,
     s.redirectToHttps ? 'https only' : null,
     s.basicAuth ? 'password' : null,
     s.ipRules && s.ipRules.allow.length > 0 ? 'ip allowlist' : null,
