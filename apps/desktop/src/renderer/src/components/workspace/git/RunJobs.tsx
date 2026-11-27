@@ -9,24 +9,10 @@ import type {
 } from '@shared/apiTypes';
 import { spanMs, stepKeys } from '@shared/pipelineEstimates';
 import { useId, useState } from 'react';
-import {
-  ChevronRight,
-  CircleCheck,
-  CircleX,
-  Clock,
-  ExternalLink,
-  Minus,
-  Spinner,
-  TriangleAlert,
-} from '@/components/icons';
+import { ChevronRight, CircleX, ExternalLink, TriangleAlert } from '@/components/icons';
 import { DeltaChip, EtaBar, EtaText, UsualHint } from '@/components/pipelines/EstimateBits';
 import { etaText, jobLiveEta, stepLiveEta } from '@/components/pipelines/estimateView';
-import {
-  RunStatusIcon,
-  type RunTone,
-  runTone,
-  spanDuration,
-} from '@/components/pipelines/runStatus';
+import { RunStatusIcon, runTone, StepGlyph, spanDuration } from '@/components/pipelines/runStatus';
 import { useJobLog } from '@/components/pipelines/useJobLog';
 import { Button } from '@/components/ui/button';
 import { SimpleTooltip } from '@/components/ui/tooltip';
@@ -57,29 +43,6 @@ export function summarizeJobs(jobs: GithubRunJob[]): string {
 
 function plural(count: number, word: string): string {
   return `${count} ${word}${count === 1 ? '' : 's'}`;
-}
-
-/** A step's own glyph. The words are for screen readers, since colour alone says too little. */
-function StepGlyph({ tone }: { tone: RunTone }): React.JSX.Element {
-  const size = 'h-3.5 w-3.5 shrink-0';
-  const icon =
-    tone.outcome === 'running' ? (
-      <Spinner className={cn(size, 'animate-spin text-warning motion-reduce:animate-none')} />
-    ) : tone.outcome === 'failed' ? (
-      <CircleX className={cn(size, 'text-destructive')} />
-    ) : tone.outcome === 'passed' ? (
-      <CircleCheck className={cn(size, 'text-success')} />
-    ) : tone.outcome === 'queued' ? (
-      <Clock className={cn(size, 'text-muted-foreground')} />
-    ) : (
-      <Minus className={cn(size, 'text-muted-foreground/60')} />
-    );
-  return (
-    <span className="flex h-4 w-4 shrink-0 items-center justify-center">
-      {icon}
-      <span className="sr-only">{tone.label}</span>
-    </span>
-  );
 }
 
 /** How long a job or step took. Skipped ones never ran, so they show nothing. */

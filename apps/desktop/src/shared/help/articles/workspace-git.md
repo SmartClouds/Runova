@@ -205,7 +205,7 @@ For the selected pipeline's latest run you see:
 - **Annotations.** The errors, warnings and notices the jobs left, when there are any. See [Pipelines](pipelines.md#annotations).
 - **Failure output.** For a failed run, a folded block with the failed jobs' errors and the end of their logs. Runova only reads it when you open it, and **Copy** copies it.
 
-The buttons under the run's details are **Fix with AI** and **Copy error** for a failed run, **Stop** while it is still going, **Re-run jobs** once it has finished, and **Open run on GitHub**. **Re-run jobs** offers **Re-run all jobs** and **Re-run failed jobs**, and asks first. A run where nothing failed only has **Re-run all jobs**. A pipeline that has never run says so and offers **Open workflow on GitHub**. In the toolbar, **Refresh from GitHub** asks again, and **Open Actions on GitHub** opens the repository's Actions page.
+The buttons under the run's details are **Fix with AI** and **Copy error** for a failed run, **Stop** while it is still going, **Re-run jobs** once it has finished, and **Open run on GitHub**. **Re-run jobs** offers **Re-run all jobs** and **Re-run failed jobs**, and asks first. The question lists the jobs that will run again, each opening onto its steps with the one that failed marked, then the skipped jobs that may run too and the ones that keep their result. GitHub re-runs whole jobs, so every step in a job runs again. A run where nothing failed only has **Re-run all jobs**. A pipeline that has never run says so and offers **Open workflow on GitHub**. In the toolbar, **Refresh from GitHub** asks again, and **Open Actions on GitHub** opens the repository's Actions page.
 
 A run that is still going refreshes about every 10 seconds, so you can watch its steps move along.
 

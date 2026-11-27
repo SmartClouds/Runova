@@ -13,7 +13,6 @@ import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { queryKeys } from '@/lib/queryKeys';
-import { resolveConfirm, useConfirmStore } from '@/stores/confirmStore';
 import { renderWithProviders } from '../../../../../test/renderer/renderWithProviders';
 import { RunDetails } from './RunDetails';
 
@@ -235,7 +234,6 @@ describe('RunDetails re-run', () => {
   beforeEach(() => {
     rerunRun.mockResolvedValue({ ok: true });
     status.mockResolvedValue(null);
-    useConfirmStore.setState({ open: false });
   });
 
   function renderRerun(run: GithubWorkflowRunInfo) {
@@ -251,9 +249,9 @@ describe('RunDetails re-run', () => {
     await user.click(await screen.findByRole('menuitem', { name: new RegExp(`^${label}`) }));
   }
 
-  async function answerConfirm(yes: boolean): Promise<void> {
-    await waitFor(() => expect(useConfirmStore.getState().open).toBe(true));
-    act(() => resolveConfirm(yes));
+  async function answerConfirm(yes: boolean, user = userEvent.setup()): Promise<void> {
+    const dialog = await screen.findByRole('dialog', { name: /^Re-run .* of CD\?$/ });
+    await user.click(within(dialog).getByRole('button', { name: yes ? /^Re-run/ : 'Cancel' }));
   }
 
   it('offers both choices on a failed or cancelled run', async () => {
@@ -279,10 +277,13 @@ describe('RunDetails re-run', () => {
     expect(screen.queryByRole('button', { name: /^Re-run/ })).not.toBeInTheDocument();
   });
 
-  it('asks first, then re-runs only the failed jobs', async () => {
+  it('asks first, showing the jobs that run again, then re-runs only the failed jobs', async () => {
     renderRerun(FAILED_RUN);
     await pick('Re-run failed jobs');
-    expect(useConfirmStore.getState().title).toBe('Re-run failed jobs of CD?');
+    const dialog = await screen.findByRole('dialog', { name: 'Re-run failed jobs of CD?' });
+    const list = await within(dialog).findByRole('list', { name: 'Jobs that run again' });
+    expect(within(list).getByRole('button', { name: /^deploy, Failed/ })).toBeInTheDocument();
+    expect(within(list).getByText('Failed here')).toBeInTheDocument();
     await answerConfirm(true);
 
     await waitFor(() =>
@@ -296,7 +297,8 @@ describe('RunDetails re-run', () => {
   it('warns that re-running everything repeats what the pipeline deploys', async () => {
     renderRerun(FAILED_RUN);
     await pick('Re-run all jobs');
-    expect(useConfirmStore.getState().description).toMatch(/deploys or publishes happens again/);
+    const dialog = await screen.findByRole('dialog', { name: 'Re-run all jobs of CD?' });
+    expect(within(dialog).getByText(/deploys or publishes happens again/)).toBeInTheDocument();
     await answerConfirm(true);
 
     await waitFor(() =>
@@ -309,7 +311,7 @@ describe('RunDetails re-run', () => {
     await userEvent.setup().click(screen.getByRole('button', { name: 'Re-run all jobs' }));
     await answerConfirm(false);
 
-    await waitFor(() => expect(useConfirmStore.getState().open).toBe(false));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(rerunRun).not.toHaveBeenCalled();
   });
 
@@ -369,10 +371,9 @@ describe('RunDetails re-run', () => {
     );
     await waitFor(() => expect(status).toHaveBeenCalledTimes(1));
 
-    await userEvent
-      .setup({ advanceTimers: vi.advanceTimersByTime })
-      .click(screen.getByRole('button', { name: 'Re-run all jobs' }));
-    await answerConfirm(true);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await user.click(screen.getByRole('button', { name: 'Re-run all jobs' }));
+    await answerConfirm(true, user);
     await screen.findByRole('button', { name: 'Starting' });
 
     await act(async () => {

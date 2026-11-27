@@ -1,5 +1,14 @@
 import type { GithubActionsHistoryItem } from '@shared/apiTypes';
-import { Ban, CircleCheck, Clock, Play, TriangleAlert } from '@/components/icons';
+import {
+  Ban,
+  CircleCheck,
+  CircleX,
+  Clock,
+  Minus,
+  Play,
+  Spinner,
+  TriangleAlert,
+} from '@/components/icons';
 import { cn } from '@/lib/utils';
 
 /** The buckets a run is filtered and coloured by, collapsed from GitHub's status + conclusion pair. */
@@ -98,6 +107,29 @@ export function RunStatusIcon({
       )}
     >
       {icon}
+    </span>
+  );
+}
+
+/** A step's own glyph. The words are for screen readers, since colour alone says too little. */
+export function StepGlyph({ tone }: { tone: RunTone }): React.JSX.Element {
+  const size = 'h-3.5 w-3.5 shrink-0';
+  const icon =
+    tone.outcome === 'running' ? (
+      <Spinner className={cn(size, 'animate-spin text-warning motion-reduce:animate-none')} />
+    ) : tone.outcome === 'failed' ? (
+      <CircleX className={cn(size, 'text-destructive')} />
+    ) : tone.outcome === 'passed' ? (
+      <CircleCheck className={cn(size, 'text-success')} />
+    ) : tone.outcome === 'queued' ? (
+      <Clock className={cn(size, 'text-muted-foreground')} />
+    ) : (
+      <Minus className={cn(size, 'text-muted-foreground/60')} />
+    );
+  return (
+    <span className="flex h-4 w-4 shrink-0 items-center justify-center">
+      {icon}
+      <span className="sr-only">{tone.label}</span>
     </span>
   );
 }

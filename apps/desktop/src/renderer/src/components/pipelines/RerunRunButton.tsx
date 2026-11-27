@@ -1,4 +1,4 @@
-import type { GithubRunRerunRequest, GithubWorkflowRunInfo } from '@shared/apiTypes';
+import type { GithubWorkflowRunInfo } from '@shared/apiTypes';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -11,38 +11,18 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { queryKeys } from '@/lib/queryKeys';
-import { confirmDialog } from '@/stores/confirmStore';
-
-type RerunScope = GithubRunRerunRequest['scope'];
+import { RerunConfirmDialog, RERUN_SCOPES as SCOPES } from './RerunConfirmDialog';
+import type { RerunScope } from './rerunPlan';
 
 /** GitHub shows the new attempt within a few seconds, so look again soon rather than on the 30s tick. */
 const START_POLL_MS = 3_000;
 /** When GitHub never shows it, the button comes back instead of staying stuck on "Starting". */
 const START_TIMEOUT_MS = 30_000;
 
-const SCOPES: Record<
-  RerunScope,
-  { label: string; hint: string; sent: string; explain: (runNumber: number) => string }
-> = {
-  all: {
-    label: 'Re-run all jobs',
-    hint: 'Every job, including the ones that passed',
-    sent: 'Asked GitHub to re-run all jobs.',
-    explain: (runNumber) =>
-      `Every job in run #${runNumber} starts again on the same commit, including the ones that passed. Anything this pipeline deploys or publishes happens again.`,
-  },
-  failed: {
-    label: 'Re-run failed jobs',
-    hint: 'Only failed jobs and the ones that need them',
-    sent: 'Asked GitHub to re-run the failed jobs.',
-    explain: (runNumber) =>
-      `The jobs in run #${runNumber} that failed or were cancelled start again on the same commit, along with any jobs that depend on them.`,
-  },
-};
-
 /**
  * Starts a finished run again. A run with jobs that did not pass gets a menu with both choices, the
- * way GitHub offers them; any other run has only one choice, so it is a plain button.
+ * way GitHub offers them; any other run has only one choice, so it is a plain button. Either way it
+ * asks first, in a dialog that lists the jobs that will run again.
  */
 export function RerunRunButton({
   projectId,
@@ -54,12 +34,18 @@ export function RerunRunButton({
   projectId: string;
   repo: string;
   workflowName: string;
-  run: Pick<GithubWorkflowRunInfo, 'id' | 'runNumber' | 'runAttempt'>;
+  run: Pick<
+    GithubWorkflowRunInfo,
+    'id' | 'status' | 'runNumber' | 'runAttempt' | 'headBranch' | 'headSha'
+  >;
   canRerunFailed: boolean;
 }): React.JSX.Element {
   const queryClient = useQueryClient();
   const attempt = run.runAttempt ?? 1;
   const [sending, setSending] = useState(false);
+  // The choice being confirmed. It outlives `asking`, so the dialog keeps its words as it fades out.
+  const [scope, setScope] = useState<RerunScope>('all');
+  const [asking, setAsking] = useState(false);
   // The attempt that was on screen when GitHub accepted. Once a newer one shows up this stops
   // matching, so nothing has to reset it, and until then a second click would only be refused.
   const [startedFrom, setStartedFrom] = useState<number | null>(null);
@@ -77,15 +63,14 @@ export function RerunRunButton({
     };
   }, [starting, projectId, queryClient]);
 
-  async function rerun(scope: RerunScope): Promise<void> {
-    const { label, sent, explain } = SCOPES[scope];
-    const confirmed = await confirmDialog({
-      title: `${label} of ${workflowName}?`,
-      description: explain(run.runNumber),
-      confirmLabel: label,
-    });
-    if (!confirmed) return;
+  function ask(choice: RerunScope): void {
+    setScope(choice);
+    setAsking(true);
+  }
 
+  async function rerun(): Promise<void> {
+    const { sent } = SCOPES[scope];
+    setAsking(false);
     setSending(true);
     try {
       const result = await window.runova.pipelines.rerunRun({ repo, runId: run.id, scope });
@@ -109,47 +94,67 @@ export function RerunRunButton({
     <RotateCw />
   );
 
+  const dialog = (
+    <RerunConfirmDialog
+      // A fresh dialog for each choice, so jobs folded open for one do not carry over to the other.
+      key={scope}
+      open={asking}
+      onOpenChange={setAsking}
+      scope={scope}
+      repo={repo}
+      workflowName={workflowName}
+      run={run}
+      onConfirm={() => void rerun()}
+    />
+  );
+
   if (!canRerunFailed) {
     return (
-      <Button
-        type="button"
-        variant="ghost"
-        size="xs"
-        className="text-muted-foreground"
-        disabled={busy}
-        onClick={() => void rerun('all')}
-      >
-        {icon}
-        {starting ? 'Starting' : SCOPES.all.label}
-      </Button>
-    );
-  }
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
+      <>
         <Button
           type="button"
           variant="ghost"
           size="xs"
           className="text-muted-foreground"
           disabled={busy}
+          onClick={() => ask('all')}
         >
           {icon}
-          {starting ? 'Starting' : 'Re-run jobs'}
-          <ChevronDown />
+          {starting ? 'Starting' : SCOPES.all.label}
         </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" collisionPadding={8} className="w-[17rem]">
-        {(['all', 'failed'] as const).map((scope) => (
-          <DropdownMenuItem key={scope} onSelect={() => void rerun(scope)}>
-            <span className="flex flex-col">
-              <span className="text-[13px] font-medium">{SCOPES[scope].label}</span>
-              <span className="text-[11px] text-muted-foreground">{SCOPES[scope].hint}</span>
-            </span>
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
+        {dialog}
+      </>
+    );
+  }
+
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            className="text-muted-foreground"
+            disabled={busy}
+          >
+            {icon}
+            {starting ? 'Starting' : 'Re-run jobs'}
+            <ChevronDown />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" collisionPadding={8} className="w-[17rem]">
+          {(['all', 'failed'] as const).map((choice) => (
+            <DropdownMenuItem key={choice} onSelect={() => ask(choice)}>
+              <span className="flex flex-col">
+                <span className="text-[13px] font-medium">{SCOPES[choice].label}</span>
+                <span className="text-[11px] text-muted-foreground">{SCOPES[choice].hint}</span>
+              </span>
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {dialog}
+    </>
   );
 }
