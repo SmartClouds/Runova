@@ -65,28 +65,31 @@ export function EditLimitsDialog({
 
   return (
     <Dialog open={open} onOpenChange={(next) => !busy && onOpenChange(next)}>
-      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+      <DialogContent className="max-h-[90vh] max-w-2xl">
         <DialogHeader>
           <DialogTitle>Edit resource limits</DialogTitle>
           <DialogDescription>
             Choose how much of the server each container may use.
           </DialogDescription>
         </DialogHeader>
-        <ResourceLimitsEditor
-          services={services}
-          value={draft}
-          onChange={setDraft}
-          host={host}
-          usage={usage}
-          focus={focus}
-          cpuOnlyLive={cpuOnlyLive}
-        />
-        {error && (
-          <Notice tone="destructive" size="sm" role="alert">
-            {error}
-          </Notice>
-        )}
-        <p className="text-xs text-muted-foreground">{cpuOnlyLive ? LIVE_NOTE : STACK_NOTE}</p>
+        {/* One scrolling body between the header and the footer, so the buttons stay put. */}
+        <div className="-mx-1 min-h-0 space-y-4 overflow-y-auto px-1 py-1">
+          <ResourceLimitsEditor
+            services={services}
+            value={draft}
+            onChange={setDraft}
+            host={host}
+            usage={usage}
+            focus={focus}
+            cpuOnlyLive={cpuOnlyLive}
+          />
+          {error && (
+            <Notice tone="destructive" size="sm" role="alert">
+              {error}
+            </Notice>
+          )}
+          <p className="text-xs text-muted-foreground">{cpuOnlyLive ? LIVE_NOTE : STACK_NOTE}</p>
+        </div>
         <DialogFooter>
           <Button type="button" variant="ghost" disabled={busy} onClick={() => onOpenChange(false)}>
             Cancel

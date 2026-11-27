@@ -47,7 +47,7 @@ export function InstallLimitsDialog({
   const [limits, setLimits] = useState<ServiceLimits[]>([]);
   return (
     <Dialog open={open} onOpenChange={(next) => !next && !busy && onBack()}>
-      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+      <DialogContent className="max-h-[90vh] max-w-2xl">
         <DialogHeader>
           <DialogTitle>Set resource limits</DialogTitle>
           <DialogDescription>
@@ -55,21 +55,24 @@ export function InstallLimitsDialog({
             the app's page.
           </DialogDescription>
         </DialogHeader>
-        {host ? (
-          <ResourceLimitsEditor
-            services={services}
-            value={limits}
-            onChange={setLimits}
-            host={host}
-            minMemoryMb={minMemoryMb}
-          />
-        ) : (
-          <Notice tone={outdated ? 'warning' : 'neutral'}>
-            {outdated
-              ? "Update this server's core to set resource limits. The app installs without limits."
-              : "Reading the server's size. You can install now without limits, or wait a moment."}
-          </Notice>
-        )}
+        {/* The body scrolls on its own, so the buttons stay below it. */}
+        <div className="-mx-1 min-h-0 overflow-y-auto px-1 py-1">
+          {host ? (
+            <ResourceLimitsEditor
+              services={services}
+              value={limits}
+              onChange={setLimits}
+              host={host}
+              minMemoryMb={minMemoryMb}
+            />
+          ) : (
+            <Notice tone={outdated ? 'warning' : 'neutral'}>
+              {outdated
+                ? "Update this server's core to set resource limits. The app installs without limits."
+                : "Reading the server's size. You can install now without limits, or wait a moment."}
+            </Notice>
+          )}
+        </div>
         <DialogFooter>
           <Button type="button" variant="ghost" disabled={busy} onClick={onBack}>
             Back

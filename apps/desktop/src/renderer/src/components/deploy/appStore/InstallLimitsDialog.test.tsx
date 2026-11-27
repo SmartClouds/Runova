@@ -36,6 +36,15 @@ describe('InstallLimitsDialog', () => {
     expect(screen.getByRole('region', { name: 'open-webui' })).toBeInTheDocument();
   });
 
+  it('scrolls the cards inside the body, with the buttons below it', () => {
+    renderDialog();
+    const body = screen.getByRole('region', { name: 'ollama' }).closest('.overflow-y-auto');
+    expect(body).not.toBeNull();
+    expect(body).toContainElement(screen.getByRole('region', { name: 'open-webui' }));
+    expect(body).not.toContainElement(screen.getByRole('button', { name: 'Install' }));
+    expect(body).not.toContainElement(screen.getByRole('button', { name: 'Back' }));
+  });
+
   it('installs with no limits when nothing is capped', async () => {
     const { onInstall } = renderDialog();
     await userEvent.click(screen.getByRole('button', { name: 'Install' }));

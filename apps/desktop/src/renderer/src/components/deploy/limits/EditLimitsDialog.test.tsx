@@ -37,6 +37,19 @@ describe('EditLimitsDialog', () => {
     ).toBeInTheDocument();
   });
 
+  it('scrolls the services and the note inside one body, with the buttons below it', () => {
+    renderDialog();
+    // The dialog grid has one row for the body; more children made the cards spill over the footer.
+    const body = screen.getByRole('region', { name: 'web' }).closest('.overflow-y-auto');
+    expect(body).not.toBeNull();
+    expect(body).toContainElement(screen.getByRole('region', { name: 'db' }));
+    expect(body).toContainElement(
+      screen.getByText('The services whose limits change restart to apply them.'),
+    );
+    expect(body).not.toContainElement(screen.getByRole('button', { name: 'Save limits' }));
+    expect(body).not.toContainElement(screen.getByRole('button', { name: 'Cancel' }));
+  });
+
   it('saves only once something changed', async () => {
     const { onSave } = renderDialog();
     const save = screen.getByRole('button', { name: 'Save limits' });
