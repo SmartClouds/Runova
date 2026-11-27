@@ -1180,11 +1180,20 @@ button.search-pill:hover {
   text-transform: uppercase;
   color: hsl(var(--muted-foreground));
 }
+/* Long unbroken strings (URLs, paths, hashes) wrap anywhere instead of running
+   past the bubble, and the text stops at four lines so the bubble keeps the
+   height its placement was worked out for. */
 .pet-speech-text {
   margin: 0;
   font-size: 13px;
   line-height: 1.35;
   font-weight: 500;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+  overflow: hidden;
 }
 .pet-speech-link {
   display: flex;
