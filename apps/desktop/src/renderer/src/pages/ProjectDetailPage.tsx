@@ -3114,13 +3114,6 @@ function ApplyVersionDialog({
     void window.runova.git.cancelApplyVersion(requestId);
   }
 
-  function handleRetry(): void {
-    if (!tag) return;
-    startedForRef.current = tag;
-    commitMutation.reset();
-    mutate({ tag, requestId: crypto.randomUUID() });
-  }
-
   const result = currentRun?.data;
   const changes = result?.changes ?? [];
   // Decisions belong to one run's file list; a fresh run starts the review over.
@@ -3153,7 +3146,66 @@ function ApplyVersionDialog({
   const isApplying = currentRun?.status === 'pending';
   const failed = currentRun?.status === 'error' || (result && !result.ok && !result.cancelled);
   const didNothing = !!result?.ok && changes.length === 0 && !result.committedByCli;
-  const canRetry = Boolean(failed || result?.cancelled || didNothing || result?.warning);
+
+  // The run's edits still on disk and not committed. A new run would find the version already
+  // set in them and leave them out of its review, so they go back to how they were first.
+  const leftover = committed
+    ? []
+    : changes.filter((change) => fileDecision(change, reviews[change.path]) !== 'revert');
+  const [undoingRun, setUndoingRun] = useState(false);
+
+  async function undoLeftover(): Promise<boolean> {
+    try {
+      for (const change of leftover) {
+        const diskId = reviews[change.path]?.diskId;
+        const swap = await window.runova.git.swapVersionFile({
+          projectId,
+          path: change.path,
+          fromId: diskId !== undefined ? diskId : change.afterId,
+          toId: change.beforeId,
+          toRawId: change.beforeRawId,
+        });
+        if (!swap.ok) {
+          toast.error(`Could not run again: ${swap.message}`);
+          return false;
+        }
+      }
+      return true;
+    } catch (error) {
+      toast.error(`Could not run again: ${(error as Error).message}`);
+      return false;
+    } finally {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.gitStatus(projectId) });
+    }
+  }
+
+  async function handleRetry(): Promise<void> {
+    if (!tag || undoingRun) return;
+    if (leftover.length > 0) {
+      const confirmed = await confirmDialog({
+        title: 'Run the version update again?',
+        description:
+          'The files this run changed go back to how they were before it, so the new run starts clean and you review every change again.',
+        items: leftover.slice(0, 8).map((change) => ({ name: change.path })),
+        moreCount: leftover.length > 8 ? leftover.length - 8 : undefined,
+        confirmLabel: 'Undo and run again',
+        icon: RefreshCw,
+      });
+      if (!confirmed) return;
+      setUndoingRun(true);
+      const undone = await undoLeftover();
+      setUndoingRun(false);
+      if (!undone) return;
+    }
+    startedForRef.current = tag;
+    commitMutation.reset();
+    mutate({ tag, requestId: crypto.randomUUID() });
+  }
+
+  // Shown after every run, not just a failed one: a run can also finish and still get it
+  // wrong (a missed file, an edit in the wrong place), and the user wants a second go.
+  const retryLabel = failed || result?.cancelled || didNothing ? 'Try again' : 'Run again';
+  const retryDisabled = undoingRun || savingReview || commitMutation.isPending;
   const cliOutput = result?.output ? displayCliOutput(result.output) : '';
   const warningText = result?.warning ? displayCliOutput(result.warning) : '';
   const errorText = displayCliOutput(
@@ -3195,7 +3247,7 @@ function ApplyVersionDialog({
               <p className="min-w-0 flex-1 text-sm text-muted-foreground">
                 Cancelled. Any edits already written are listed below.
               </p>
-              <Button variant="soft" size="sm" onClick={handleRetry}>
+              <Button variant="soft" size="sm" onClick={() => void handleRetry()}>
                 <RefreshCw className="h-3.5 w-3.5" /> Try again
               </Button>
             </div>
@@ -3213,7 +3265,7 @@ function ApplyVersionDialog({
                 <Button
                   variant="soft"
                   size="sm"
-                  onClick={handleRetry}
+                  onClick={() => void handleRetry()}
                   className="shrink-0 self-start sm:self-auto"
                 >
                   <RefreshCw className="h-3.5 w-3.5" /> Try again
@@ -3239,7 +3291,7 @@ function ApplyVersionDialog({
                 <Button
                   variant="soft"
                   size="sm"
-                  onClick={handleRetry}
+                  onClick={() => void handleRetry()}
                   className="shrink-0 self-start sm:self-auto"
                 >
                   <RefreshCw className="h-3.5 w-3.5" /> Run again
@@ -3365,7 +3417,7 @@ function ApplyVersionDialog({
                 The run finished without changing any files. The version may already be set, or the
                 CLI could not find where it lives.
               </p>
-              <Button variant="soft" size="sm" onClick={handleRetry}>
+              <Button variant="soft" size="sm" onClick={() => void handleRetry()}>
                 <RefreshCw className="h-3.5 w-3.5" /> Try again
               </Button>
             </div>
@@ -3397,11 +3449,17 @@ function ApplyVersionDialog({
             </>
           ) : (
             <>
-              {canRetry ? (
-                <Button variant="soft" onClick={handleRetry}>
-                  <RefreshCw className="h-4 w-4" /> Try again
-                </Button>
-              ) : null}
+              <Button variant="soft" onClick={() => void handleRetry()} disabled={retryDisabled}>
+                {undoingRun ? (
+                  <>
+                    <Spinner className="h-4 w-4 animate-spin" /> Undoing…
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-4 w-4" /> {retryLabel}
+                  </>
+                )}
+              </Button>
               <Button onClick={onBackToTag}>
                 <Tag className="h-4 w-4" /> Back to tag
               </Button>

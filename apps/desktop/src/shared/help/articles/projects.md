@@ -440,6 +440,8 @@ The dialog warns if the tag already exists, if there are uncommitted files that 
 
 You then review every changed file. For each file you can **Keep** or **Revert** the whole file, or open it and keep or revert single lines or blocks (shift-click to choose a range). **Keep the rest** and **Revert the rest** finish quickly. A file marked **Had edits** already had uncommitted changes of yours. When every file is decided, click **Commit N kept files**. Tagging stays locked until the version bump is committed, because the tag goes on the last commit. If you create the tag before committing the bump, a warning explains that the tag would carry the old version. **Back to tag** returns to the tag dialog.
 
+If the run missed a file or got an edit wrong, click **Run again** (**Try again** after a failed run). The files the run changed that you have not committed yet go back to how they were first, after you confirm, so the new run starts clean and you review every change again.
+
 ## The Build Prompt dialog
 
 Build Prompt turns a rough request into a clear prompt for a project. Open it from the **Build a prompt for this project** button on a project card. In the Workspace, `Ctrl+G` opens it for the project on screen. Your request and result are remembered per project, and Generate and Translate keep running if you close the dialog.

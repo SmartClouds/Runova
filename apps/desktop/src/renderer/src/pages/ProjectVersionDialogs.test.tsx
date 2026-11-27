@@ -248,6 +248,91 @@ describe('ProjectVersionDialogs', () => {
     expect(createTag).not.toHaveBeenCalled();
   });
 
+  it('runs a finished bump again after putting its edits back the way they were', async () => {
+    // A run can finish fine and still get the version wrong, and the dialog used to offer a
+    // second go only when the run failed. The new run has to start from the files as they were,
+    // or it finds the version already set in them and leaves them out of its review.
+    const bump = {
+      path: 'app/windows/runner/Runner.rc',
+      kind: 'modified',
+      beforeId: 'a'.repeat(40),
+      afterId: 'b'.repeat(40),
+      beforeRawId: 'c'.repeat(40),
+      afterRawId: null,
+      additions: 1,
+      deletions: 1,
+      diff: '@@ -1 +1 @@\n-#define VERSION_AS_STRING "1.3.0"\n+#define VERSION_AS_STRING "3.1.2"',
+    };
+    const applyVersion = vi.fn(async () => ({ ok: true, output: '', changes: [bump] }));
+    const swapVersionFile = vi.fn(async () => ({ ok: true, message: 'Updated.' }));
+    const { user } = renderDialogs({
+      'git.applyVersion': applyVersion,
+      'git.swapVersionFile': swapVersionFile,
+    });
+
+    await user.type(await screen.findByLabelText('Version'), '3.1.2');
+    await user.click(screen.getByRole('button', { name: /Update version in files/ }));
+    await screen.findByRole('group', { name: `Decision for ${bump.path}` });
+    expect(screen.queryByRole('button', { name: /Try again/ })).toBeNull();
+
+    // Saying no leaves the file and the review alone.
+    await user.click(screen.getByRole('button', { name: /Run again/ }));
+    await waitFor(() => expect(useConfirmStore.getState().open).toBe(true));
+    expect(useConfirmStore.getState().items).toEqual([{ name: bump.path }]);
+    resolveConfirm(false);
+    await waitFor(() => expect(useConfirmStore.getState().open).toBe(false));
+    expect(swapVersionFile).not.toHaveBeenCalled();
+    expect(applyVersion).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByRole('button', { name: /Run again/ }));
+    await waitFor(() => expect(useConfirmStore.getState().open).toBe(true));
+    resolveConfirm(true);
+
+    await waitFor(() => expect(applyVersion).toHaveBeenCalledTimes(2));
+    expect(swapVersionFile).toHaveBeenCalledWith({
+      projectId: 'p1',
+      path: bump.path,
+      fromId: bump.afterId,
+      toId: bump.beforeId,
+      toRawId: bump.beforeRawId,
+    });
+  });
+
+  it('does not run again when a file cannot be put back', async () => {
+    const bump = {
+      path: 'package.json',
+      kind: 'modified',
+      beforeId: 'a'.repeat(40),
+      afterId: 'b'.repeat(40),
+      beforeRawId: null,
+      afterRawId: null,
+      additions: 1,
+      deletions: 1,
+      diff: '@@ -1 +1 @@\n-{ "version": "1.0.0" }\n+{ "version": "1.1.0" }',
+    };
+    const applyVersion = vi.fn(async () => ({ ok: true, output: '', changes: [bump] }));
+    const { user } = renderDialogs({
+      'git.applyVersion': applyVersion,
+      'git.swapVersionFile': async () => ({
+        ok: false,
+        message: 'package.json changed again after the run, so it was left as it is.',
+      }),
+    });
+
+    await user.type(await screen.findByLabelText('Version'), '1.1.0');
+    await user.click(screen.getByRole('button', { name: /Update version in files/ }));
+    await screen.findByRole('group', { name: 'Decision for package.json' });
+    await user.click(screen.getByRole('button', { name: /Run again/ }));
+    await waitFor(() => expect(useConfirmStore.getState().open).toBe(true));
+    resolveConfirm(true);
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/changed again/)),
+    );
+    expect(applyVersion).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('group', { name: 'Decision for package.json' })).toBeTruthy();
+  });
+
   it('refreshes the commit lists after creating a tag, since HEAD does not move', async () => {
     // Without this the History dialog and the workspace commit list kept showing the commit
     // with no tag chip, while the tag was already on GitHub.
