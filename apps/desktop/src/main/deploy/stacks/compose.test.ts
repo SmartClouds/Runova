@@ -8,6 +8,7 @@ import {
   buildContextReason,
   discoverComposeFiles,
   dockerfilesOf,
+  envFileBlocking,
   isComposeFileName,
   previewFromSource,
   previewStack,
@@ -501,5 +502,95 @@ describe('projectFilesOf and sourceBlocking (E105)', () => {
     expect(blocked.registry).toContain('../shared');
     expect(blocked.release).toContain('../shared');
     expect(blocked.local).toBeNull();
+  });
+});
+
+describe('envFileBlocking', () => {
+  async function check(compose: string, files: Record<string, string> = {}) {
+    const folder = folderWith({ 'compose.yaml': compose, ...files });
+    const source = await readStackSource(deps(folder), {
+      projectId: 'p1',
+      composePath: 'compose.yaml',
+      environmentId: null,
+    });
+    const project = previewFromSource(source, undefined, false).project;
+    if (!project) throw new Error('did not parse');
+    return envFileBlocking(project, source.composeDir);
+  }
+
+  const READS_ENV = 'services:\n  app:\n    image: ghcr.io/acme/app:1.0\n    env_file: .env\n';
+
+  // A registry deploy of a compose file with env_file: .env, from a folder holding only
+  // .env.prod, used to upload without the .env and fail on the server.
+  it('refuses every source when an env file a service needs is not in the compose folder', async () => {
+    const blocked = await check(READS_ENV, { '.env.prod': 'A=1\n' });
+
+    for (const reason of [blocked.registry, blocked.release, blocked.local]) {
+      expect(reason).toContain('app reads .env (env_file)');
+      expect(reason).toContain("there is no .env in the compose file's folder");
+      expect(reason).toContain('under environment:');
+    }
+  });
+
+  it('lets a registry deploy send an env file that is here, which a local deploy leaves out when .dockerignore does', async () => {
+    const blocked = await check(READS_ENV, { '.env': 'A=1\n', '.dockerignore': '.env\n' });
+
+    expect(blocked.registry).toBeNull();
+    expect(blocked.release).toBeNull();
+    expect(blocked.local).toContain('.dockerignore leaves it out');
+  });
+
+  it('blocks nothing when the env file is here and goes with every source', async () => {
+    expect(await check(READS_ENV, { '.env': 'A=1\n' })).toEqual({
+      registry: null,
+      release: null,
+      local: null,
+    });
+  });
+
+  it('skips entries marked required: false and paths on the server', async () => {
+    const blocked = await check(
+      [
+        'services:',
+        '  app:',
+        '    image: ghcr.io/acme/app:1.0',
+        '    env_file:',
+        '      - path: ./optional.env',
+        '        required: false',
+        '      - /etc/app/shared.env',
+        '',
+      ].join('\n'),
+    );
+
+    expect(blocked).toEqual({ registry: null, release: null, local: null });
+  });
+
+  it('still needs an entry in the long form without required: false', async () => {
+    const blocked = await check(
+      'services:\n  app:\n    image: x\n    env_file:\n      - path: ./app.env\n',
+    );
+
+    expect(blocked.registry).toContain('app reads ./app.env');
+  });
+
+  it('refuses a local deploy of an env file outside the compose folder, which the folder upload cannot carry', async () => {
+    const blocked = await check('services:\n  app:\n    image: x\n    env_file: ../shared.env\n');
+
+    expect(blocked.local).toContain("outside the compose file's folder");
+    // sourceBlocking already says why a registry or release deploy cannot carry it.
+    expect(blocked.registry).toBeNull();
+  });
+
+  it('shows the block in the preview for the source it applies to', async () => {
+    const folder = folderWith({ 'compose.yaml': READS_ENV, '.env.prod': 'A=1\n' });
+
+    const preview = await previewStack(deps(folder), {
+      projectId: 'p1',
+      composePath: 'compose.yaml',
+      environmentId: null,
+    });
+
+    expect(preview.blocking).toBeNull();
+    expect(preview.sourceBlocking.registry).toContain('app reads .env (env_file)');
   });
 });

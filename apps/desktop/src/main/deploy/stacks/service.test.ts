@@ -387,6 +387,31 @@ describe('DeployStacks.create', () => {
     expect(calls.posts).toEqual([]);
   });
 
+  it('refuses a deploy whose env_file is not in the compose folder, before the server hears of it', async () => {
+    const { stacks, hub, calls, pack } = harness({
+      'compose.yaml': `services:
+  app:
+    image: ghcr.io/acme/app:1.0
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "true"]
+    env_file: .env
+`,
+      '.env.prod': 'A=1\n',
+    });
+
+    await expect(stacks.create({ ...CREATE, proxiedServices: [] })).rejects.toThrow(
+      'app reads .env (env_file)',
+    );
+    const { proxiedServices: _proxied, ...local } = CREATE;
+    await expect(stacks.prepareLocal({ ...local, imageSource: 'local' })).rejects.toThrow(
+      'app reads .env (env_file)',
+    );
+    expect(hub.createStack).not.toHaveBeenCalled();
+    expect(pack).not.toHaveBeenCalled();
+    expect(calls.posts).toEqual([]);
+  });
+
   it('sends only the files the compose file reads with a registry deploy, without asking', async () => {
     const { stacks, calls, pack, folder } = harness({
       'compose.yaml': MOUNTS,

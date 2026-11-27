@@ -1,16 +1,18 @@
-import { lstat, readFile, realpath } from 'node:fs/promises';
-import { dirname, isAbsolute, posix, relative, resolve } from 'node:path';
+import { lstat, readFile, realpath, stat } from 'node:fs/promises';
+import { dirname, isAbsolute, join, posix, relative, resolve } from 'node:path';
 import {
   analyzeComposePorts,
   type ComposePortBinding,
   type ComposeProject,
   type ComposeRisk,
   type ComposeRiskSeverity,
+  type DockerignoreMatcher,
   dockerCleanPath,
   lintComposeProject,
   MAX_COMPOSE_FILE_BYTES,
   type Project,
   parseComposeFile,
+  parseDockerignore,
   renderComposeEnv,
   renderLoopbackOverride,
 } from '@runova/core';
@@ -282,6 +284,108 @@ export function sourceBlocking(project: ComposeProject): Record<DeployImageSourc
   };
 }
 
+/** The env files each service cannot start without, as written: every entry but `required: false`. */
+function requiredEnvFiles(project: ComposeProject): Array<{ service: string; path: string }> {
+  const found: Array<{ service: string; path: string }> = [];
+  for (const { name, definition } of project.services) {
+    const entries = Array.isArray(definition.env_file)
+      ? definition.env_file
+      : definition.env_file === undefined
+        ? []
+        : [definition.env_file];
+    for (const entry of entries) {
+      const path =
+        typeof entry === 'string'
+          ? entry
+          : isRecord(entry) && entry.required !== false
+            ? entry.path
+            : undefined;
+      if (projectPath(path)) found.push({ service: name, path });
+    }
+  }
+  return found;
+}
+
+const isFile = (path: string): Promise<boolean> =>
+  stat(path).then(
+    (info) => info.isFile(),
+    () => false,
+  );
+
+/** The compose folder's .dockerignore, or null. A broken one is reported when the folder is packed. */
+async function dockerignoreOf(folder: string): Promise<DockerignoreMatcher | null> {
+  const text = await readFile(join(folder, '.dockerignore'), 'utf8').catch(() => null);
+  if (text === null) return null;
+  const parsed = parseDockerignore(text);
+  return parsed.ok ? parsed.matcher : null;
+}
+
+function envFileReason(service: string, path: string, why: string): string {
+  return `${service} reads ${path} (env_file), but ${why}, so the server would not get it and Compose would stop with "env file not found". The environment picked in Source does not stand in for it: its values only fill the \${...} in the compose file. List the variables ${service} needs under environment: instead (for example NAME: \${NAME}), or mark the entry required: false if ${service} can start without it.`;
+}
+
+/**
+ * Why each image source would leave out an env file a service needs, or null. A registry or
+ * release deploy sends a file the compose file reads only when it is in the compose folder here,
+ * and a local folder deploy sends that folder minus what .dockerignore leaves out. Without this
+ * the deploy failed on the server, after the upload (an env_file: .env next to a .env.prod).
+ */
+export async function envFileBlocking(
+  project: ComposeProject,
+  composeDir: string,
+): Promise<Record<DeployImageSource, string | null>> {
+  const blocked: Record<DeployImageSource, string | null> = {
+    registry: null,
+    release: null,
+    local: null,
+  };
+  let matcher: DockerignoreMatcher | null | undefined;
+  for (const { service, path } of requiredEnvFiles(project)) {
+    const clean = cleaned(path);
+    if (outside(clean)) {
+      // sourceBlocking already refuses this for a registry or release deploy.
+      blocked.local ??= envFileReason(service, path, "it is outside the compose file's folder");
+      continue;
+    }
+    if (!(await isFile(resolve(composeDir, ...clean.split('/'))))) {
+      const reason = envFileReason(
+        service,
+        path,
+        `there is no ${clean} in the compose file's folder`,
+      );
+      blocked.registry ??= reason;
+      blocked.release ??= reason;
+      blocked.local ??= reason;
+      continue;
+    }
+    if (matcher === undefined) matcher = await dockerignoreOf(composeDir);
+    if (matcher?.excludes(clean)) {
+      blocked.local ??= envFileReason(service, path, '.dockerignore leaves it out');
+    }
+  }
+  return blocked;
+}
+
+/** A preview with what the files on this computer block added to what the compose file blocks. */
+export async function withEnvFileBlocking<
+  T extends {
+    project: ComposeProject | null;
+    sourceBlocking: Record<DeployImageSource, string | null>;
+  },
+>(preview: T, composeDir: string): Promise<T> {
+  if (!preview.project) return preview;
+  const files = await envFileBlocking(preview.project, composeDir);
+  const own = preview.sourceBlocking;
+  return {
+    ...preview,
+    sourceBlocking: {
+      registry: own.registry ?? files.registry,
+      release: own.release ?? files.release,
+      local: own.local ?? files.local,
+    },
+  };
+}
+
 /**
  * Dockerfiles inside the compose folder, relative to it, that must go into the context even when
  * .dockerignore leaves them out (Docker always sends a build's own Dockerfile).
@@ -341,7 +445,10 @@ export async function previewStack(
     envText: _envText,
     project: _project,
     ...preview
-  } = previewFromSource(source, input.proxiedServices, input.selinuxEnforcing === true);
+  } = await withEnvFileBlocking(
+    previewFromSource(source, input.proxiedServices, input.selinuxEnforcing === true),
+    source.composeDir,
+  );
   return preview;
 }
 

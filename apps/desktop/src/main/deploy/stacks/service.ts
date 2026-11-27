@@ -56,6 +56,7 @@ import {
   previewStack,
   readStackSource,
   type StackSourceDeps,
+  withEnvFileBlocking,
 } from './compose';
 
 /**
@@ -402,9 +403,13 @@ export class DeployStacks {
   async prepareLocal(input: DeployLocalUploadInput): Promise<DeployLocalUploadPlan> {
     this.dropExpiredApprovals();
     const source = await readStackSource(this.deps.source, input);
-    const preview = previewFromSource(source, undefined, false);
-    if (preview.blocking || !preview.project) {
-      throw new Error(preview.blocking ?? 'The compose file could not be read.');
+    const preview = await withEnvFileBlocking(
+      previewFromSource(source, undefined, false),
+      source.composeDir,
+    );
+    const blocking = preview.blocking ?? preview.sourceBlocking.local;
+    if (blocking || !preview.project) {
+      throw new Error(blocking ?? 'The compose file could not be read.');
     }
     this.progress(input.serverId, 'packing');
     const folder = await mkdtemp(join(this.deps.tempRoot?.() ?? tmpdir(), 'runova-context-'));
@@ -457,7 +462,10 @@ export class DeployStacks {
     const imageSource = input.imageSource ?? 'registry';
     this.progress(input.serverId, 'reading');
     const source = await readStackSource(this.deps.source, input);
-    const preview = previewFromSource(source, input.proxiedServices, false);
+    const preview = await withEnvFileBlocking(
+      previewFromSource(source, input.proxiedServices, false),
+      source.composeDir,
+    );
     const blocking = preview.blocking ?? preview.sourceBlocking[imageSource];
     if (blocking || preview.envText === null || !preview.project) {
       throw new Error(blocking ?? 'The compose file could not be read.');
