@@ -43,6 +43,13 @@ public sealed class CommandAllowlistTests
     [InlineData("du -sh /var/lib/docker")]
     [InlineData("ufw status verbose")]
     [InlineData("  docker   ps  ")]
+    [InlineData("find / -xdev -name *2026-11-27*")]
+    [InlineData("find /var/log -maxdepth 2 -type f -name *.log -mtime -1")]
+    [InlineData("find / -xdev -iname '*.conf' -not -path '/proc/*'")]
+    [InlineData("find /etc -name \"nginx*.conf\" -o -name ?ginx.conf -print")]
+    [InlineData("find /srv -size +100M -perm -4000 -ls")]
+    [InlineData("ls -la /var/www")]
+    [InlineData("stat -L /etc/nginx/nginx.conf")]
     public void Read_only_diagnostics_are_allowed(string command)
     {
         Assert.NotNull(CommandAllowlist.Parse(command));
@@ -60,6 +67,15 @@ public sealed class CommandAllowlistTests
     [InlineData("docker logs 'shop-api-1'")]
     [InlineData("docker logs \"shop-api-1\"")]
     [InlineData("df -h *")]
+    [InlineData("ls /var/*")]
+    [InlineData("find /var/* -name x")]
+    [InlineData("find / -perm *")]
+    [InlineData("find / -name '*.log")]
+    [InlineData("find / -name '*.log\"")]
+    [InlineData("find / -name ''")]
+    [InlineData("find / -name 'a'b'")]
+    [InlineData("find / -name 'a b'")]
+    [InlineData("find / -name *.log 'x'")]
     [InlineData("df -h ~")]
     [InlineData("df\t-h")]
     [InlineData("df -h\nrm -rf /")]
@@ -105,6 +121,16 @@ public sealed class CommandAllowlistTests
     [InlineData("ss -D /tmp/dump")]
     [InlineData("dmesg -C")]
     [InlineData("free -s 1")]
+    [InlineData("find / -name *.log -delete")]
+    [InlineData("find / -name *.sh -exec sh {} ;")]
+    [InlineData("find / -name x -exec rm -rf /")]
+    [InlineData("find / -name x -execdir rm x")]
+    [InlineData("find / -name x -ok rm")]
+    [InlineData("find / -fprint /etc/passwd")]
+    [InlineData("find / -fls /tmp/out")]
+    [InlineData("find / -printf %p")]
+    [InlineData("find / -files0-from /tmp/list")]
+    [InlineData("ls -R /")]
     [InlineData("docker logs -- shop-api-1")]
     [InlineData("docker logs --tail")]
     [InlineData("docker logs a b")]
@@ -113,6 +139,16 @@ public sealed class CommandAllowlistTests
     public void Anything_else_is_refused(string command)
     {
         Assert.Null(CommandAllowlist.Parse(command));
+    }
+
+    [Fact]
+    public void A_find_pattern_reaches_find_as_written_without_its_quotes()
+    {
+        Assert.Equal(
+            ["find", "/", "-xdev", "-name", "*2026-11-27*", "-not", "-path", "/proc/*"],
+            CommandAllowlist.Parse("find / -xdev -name '*2026-11-27*' -not -path \"/proc/*\"")!);
+        Assert.Equal(["find", "/", "-name", "*.log"], CommandAllowlist.Parse("find / -name *.log")!);
+        Assert.Contains("find", CommandAllowlist.Summary);
     }
 
     [Fact]

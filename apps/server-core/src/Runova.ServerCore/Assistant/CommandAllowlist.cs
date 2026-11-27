@@ -3,10 +3,13 @@ namespace Runova.ServerCore.Assistant;
 /// <summary>
 /// The read-only diagnostics a command may be to run without an approval: one simple command,
 /// nothing a shell would read as more than words. The text may only hold letters, digits, spaces
-/// and <c>._/:=,@+-</c>, so there are no quotes, variables, globs, redirections, pipes or command
-/// separators to hide anything behind. The program and its subcommand must be on the list below,
-/// and every flag must be one that only reads (no following a log, no writing a file, no killing a
-/// socket). A command that passes runs from its argument list, never through a shell.
+/// and <c>._/:=,@+-</c>, so there are no variables, redirections, pipes or command separators to
+/// hide anything behind. The one exception is a name pattern for find (<c>-name *.log</c>): its
+/// value may hold <c>*</c> and <c>?</c>, and may be wrapped in one pair of quotes, which come off
+/// before it runs. The program and its subcommand must be on the list below, and every flag must be
+/// one that only reads (no following a log, no writing a file, no killing a socket, no find -exec
+/// or -delete). A command that passes runs from its argument list, never through a shell, so a
+/// pattern reaches find as it was written and nothing expands it.
 /// </summary>
 /// <remarks>
 /// A blocklist of dangerous patterns is easy to get around (base64, eval, an alias); this list
@@ -25,6 +28,7 @@ internal static class CommandAllowlist
     /// <param name="MaxPositionals">How many plain words may follow (container names, units, paths).</param>
     /// <param name="Required">A flag the command must carry (docker stats only reads once with --no-stream).</param>
     /// <param name="Verbs">When set, what the first plain word must be (ip addr show, not ip addr flush).</param>
+    /// <param name="Patterns">Value flags whose value is a pattern, which may hold <c>*</c> and <c>?</c> and come quoted.</param>
     private sealed record Rule(
         string[] Path,
         string Letters = "",
@@ -32,12 +36,41 @@ internal static class CommandAllowlist
         string[]? ValueFlags = null,
         int MaxPositionals = 0,
         string? Required = null,
-        string[]? Verbs = null)
+        string[]? Verbs = null,
+        string[]? Patterns = null)
     {
         public string[] AllFlags { get; } = Flags ?? [];
 
         public string[] AllValueFlags { get; } = ValueFlags ?? [];
+
+        public string[] AllPatterns { get; } = Patterns ?? [];
     }
+
+    private static readonly string[] _findPatterns =
+    [
+        "-name", "-iname", "-path", "-ipath", "-wholename", "-iwholename", "-lname", "-ilname", "-regex", "-iregex",
+    ];
+
+    /// <summary>
+    /// What find may do: tests and the actions that only print. Nothing that runs a program (-exec,
+    /// -execdir, -ok, -okdir), deletes (-delete) or writes a file (-fprint, -fprint0, -fprintf, -fls).
+    /// </summary>
+    private static readonly Rule _find = new(
+        ["find"],
+        Flags:
+        [
+            "-L", "-H", "-P", "-xdev", "-mount", "-depth", "-daystart", "-not", "-a", "-o", "-and", "-or",
+            "-print", "-print0", "-ls", "-quit", "-empty", "-readable", "-writable", "-executable",
+            "-nouser", "-nogroup", "-true", "-false",
+        ],
+        ValueFlags:
+        [
+            .. _findPatterns, "-maxdepth", "-mindepth", "-type", "-xtype", "-mtime", "-mmin", "-atime", "-amin",
+            "-ctime", "-cmin", "-newer", "-size", "-user", "-group", "-uid", "-gid", "-perm", "-links", "-inum",
+            "-samefile",
+        ],
+        MaxPositionals: 4,
+        Patterns: _findPatterns);
 
     private static readonly string[] _dockerLogFlags = ["--timestamps", "--details", "-t"];
 
@@ -109,6 +142,9 @@ internal static class CommandAllowlist
         new(["top"], Letters: "bc", ValueFlags: ["-n"]),
         new(["vmstat"], Letters: "swatS", MaxPositionals: 2),
         new(["du"], Letters: "shxcak", Flags: ["--summarize", "--human-readable"], ValueFlags: ["-d", "--max-depth"], MaxPositionals: 4),
+        _find,
+        new(["ls"], Letters: "laAhtrSdi1Fn", Flags: ["--all", "--almost-all", "--human-readable", "--full-time"], MaxPositionals: 8),
+        new(["stat"], Letters: "L", MaxPositionals: 8),
         new(["dmesg"], Letters: "Tkx", Flags: ["--ctime", "--kernel"], ValueFlags: ["-l", "--level"]),
         new(["ufw", "status"], MaxPositionals: 1, Verbs: ["verbose", "numbered"]),
         new(["getenforce"]),
@@ -144,7 +180,43 @@ internal static class CommandAllowlist
             .Where(candidate => candidate.Path.Length <= words.Length && candidate.Path.SequenceEqual(words.Take(candidate.Path.Length), StringComparer.Ordinal))
             .OrderByDescending(candidate => candidate.Path.Length)
             .FirstOrDefault();
-        return rule is not null && Accepts(rule, words.AsSpan(rule.Path.Length)) ? words : null;
+        if (rule is null || !Accepts(rule, words.AsSpan(rule.Path.Length)))
+        {
+            return null;
+        }
+
+        // Quotes and globs only in a pattern: the value right after a pattern flag. Elsewhere they
+        // could only be meant for a shell, which never sees the command.
+        for (var i = 0; i < words.Length; i++)
+        {
+            if (!words[i].Any(IsPatternCharacter))
+            {
+                continue;
+            }
+
+            var pattern = i > rule.Path.Length && rule.AllPatterns.Contains(words[i - 1], StringComparer.Ordinal)
+                ? Unquote(words[i])
+                : null;
+            if (pattern is null)
+            {
+                return null;
+            }
+
+            words[i] = pattern;
+        }
+
+        return words;
+    }
+
+    /// <summary>
+    /// A pattern as find should get it: without the one pair of quotes around it, when it has them.
+    /// Null for a quote anywhere else, or nothing between the quotes.
+    /// </summary>
+    private static string? Unquote(string word)
+    {
+        var quoted = word.Length >= 2 && word[0] is '\'' or '"' && word[^1] == word[0];
+        var inner = quoted ? word[1..^1] : word;
+        return inner.Length > 0 && !inner.Any(character => character is '\'' or '"') ? inner : null;
     }
 
     private static bool Accepts(Rule rule, ReadOnlySpan<string> rest)
@@ -239,5 +311,9 @@ internal static class CommandAllowlist
     }
 
     private static bool IsAllowedCharacter(char character) =>
-        char.IsAsciiLetterOrDigit(character) || character is ' ' or '.' or '_' or '/' or ':' or '=' or ',' or '@' or '+' or '-';
+        char.IsAsciiLetterOrDigit(character) || character is ' ' or '.' or '_' or '/' or ':' or '=' or ',' or '@' or '+' or '-'
+        || IsPatternCharacter(character);
+
+    /// <summary>What only a pattern may hold.</summary>
+    private static bool IsPatternCharacter(char character) => character is '*' or '?' or '\'' or '"';
 }
