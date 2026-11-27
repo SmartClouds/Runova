@@ -1,6 +1,7 @@
 import type { DeployAssistantAppRef } from '@shared/deployAssistantTypes';
 import { Package, Plus, X } from '@/components/icons';
 import { SimpleTooltip } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 
 /**
  * The app a chat is about, above the task box. On an app's page it is there by default, so a
@@ -34,7 +35,14 @@ export function AppAttachment({
       {app ? (
         <>
           <SimpleTooltip label={`App: ${app.name}`}>
-            <span className="inline-flex h-6 min-w-0 max-w-full items-center gap-1.5 rounded-full bg-primary/12 pl-2 pr-1 text-xs font-medium text-primary">
+            <span
+              className={cn(
+                'inline-flex h-6 min-w-0 max-w-full items-center gap-1.5 rounded-full bg-primary/12 pl-2.5 text-xs font-medium text-primary',
+                // The remove button brings its own room on the right; without it the name
+                // needs the same space as on the left.
+                locked ? 'pr-2.5' : 'pr-1',
+              )}
+            >
               <Package className="h-3 w-3 shrink-0" />
               <span className="truncate">{app.name}</span>
               {!locked && (
