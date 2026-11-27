@@ -346,7 +346,7 @@ export function FirewallPanel({ server }: { server: DeployServer }): React.JSX.E
           )
         }
       />
-      <div className="grid items-start gap-2 xl:grid-cols-2">
+      <div className="grid gap-2 xl:grid-cols-2">
         <PresetsCard
           presets={presets.data}
           rules={rules}
