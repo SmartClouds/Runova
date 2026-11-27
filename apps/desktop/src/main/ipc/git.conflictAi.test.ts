@@ -28,6 +28,11 @@ vi.mock('../cli/headlessPrompt', () => headless);
 
 vi.mock('../pipelines/watcher', () => ({ schedulePipelineCheck: vi.fn() }));
 
+// The git channels bring most of the main process with them. Vitest keeps the transformed files
+// between the hooks' imports, so loading them once here moves the cold transform (slow on the Mac
+// runner's disk) out of the first hook's time limit, as in git.clone.test.ts.
+await import('./git');
+
 const PROJECT_ID = 'p1';
 const FILE = 'src/app.ts';
 const RESOLVED = 'export const a = 1;\nexport const b = 2;\nexport const c = 3;\n';

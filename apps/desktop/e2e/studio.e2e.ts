@@ -98,7 +98,10 @@ test("refuses a project's video folder inside the project source", async () => {
   await expect(dialog.getByRole('button', { name: 'Save' })).toBeDisabled();
 
   await dialog.getByLabel('Folder').fill(join(launched.root, 'Shop videos'));
-  await expect(dialog.getByText('Studio can keep videos here.')).toBeVisible();
+  // Save opens up once the check finds no error. A warning may still show (a runner low on disk
+  // space gets one), so the "all good" line is not what this waits for.
+  await expect(dialog.getByRole('button', { name: 'Save' })).toBeEnabled();
+  await expect(dialog.getByText(/inside the project's folder/)).toHaveCount(0);
   await dialog.getByRole('button', { name: 'Save' }).click();
   await expect(
     launched.page.getByText(join(launched.root, 'Shop videos'), { exact: true }),

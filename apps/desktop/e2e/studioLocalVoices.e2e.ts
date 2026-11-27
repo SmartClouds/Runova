@@ -172,8 +172,12 @@ test('points to Dev Setup for local voices, and makes a voice profile with conse
     await expect(dialog.getByText('No voices yet')).toBeVisible();
     await dialog.getByRole('textbox', { name: 'New voice' }).fill('Amin');
     await dialog.getByRole('button', { name: 'Record', exact: true }).click();
-    await page.waitForTimeout(5_000);
-    await dialog.getByRole('button', { name: 'Stop' }).click();
+    // Timed by the recorder's own clock, which starts once the microphone is open. A fixed wait
+    // after the click lost the seconds a busy runner spent opening it, and left a 3.0 s take.
+    const stop = dialog.getByRole('button', { name: 'Stop' });
+    await expect(stop).toBeVisible({ timeout: 30_000 });
+    await expect(dialog.getByText('6 s', { exact: true })).toBeVisible({ timeout: 30_000 });
+    await stop.click();
     await expect(dialog.getByLabel('What the take says')).toHaveValue(SAID, { timeout: 30_000 });
     const save = dialog.getByRole('button', { name: 'Save voice' });
     await expect(save).toBeDisabled();
