@@ -1,11 +1,15 @@
 import { coreErrorMessage } from '@shared/coreErrors';
-import type { NetworkInfo } from '@shared/deploy/protocol/generated/Runova.ServerCore.Contracts';
-import { useQuery } from '@tanstack/react-query';
+import type {
+  ContainerSummary,
+  NetworkInfo,
+} from '@shared/deploy/protocol/generated/Runova.ServerCore.Contracts';
+import { useQueries, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { LinkOff, NetworkIcon, Plus, Spinner } from '@/components/icons';
 import { Chip, EmptyState, Notice, SECTION_HEADING, SECTION_WELL } from '@/components/pageKit';
 import { Button } from '@/components/ui/button';
 import { Combobox } from '@/components/ui/combobox';
+import { CopyButton } from '@/components/ui/copy-button';
 import {
   Dialog,
   DialogContent,
@@ -23,7 +27,21 @@ import { confirmDialog } from '@/stores/confirmStore';
  * The networks one service of an app joins besides its own. Picking another app's network and
  * adding it lets the service reach that app's containers by their service names, and them reach
  * it. The choice is saved with a new revision, so every later deploy and rollback keeps it.
+ * Each joined network shows the address the service's containers have on it.
  */
+
+/** One container's addresses on one network. */
+interface ServiceAddress {
+  container: string;
+  ipv4?: string;
+  ipv6?: string;
+}
+
+/** What the dialog knows of the service's addresses on one network. */
+type AddressesState =
+  | { kind: 'reading' }
+  | { kind: 'failed' }
+  | { kind: 'found'; addresses: ServiceAddress[] };
 
 export interface ServiceNetworksDialogProps {
   open: boolean;
@@ -34,6 +52,8 @@ export interface ServiceNetworksDialogProps {
   service: string;
   /** The networks the service joins in the live revision. */
   joined: readonly string[];
+  /** The service's containers right now, read in full for their address on each network. */
+  containers?: readonly ContainerSummary[];
   busy: boolean;
   error?: string | null;
   /** Every network the service should join from now on. */
@@ -47,6 +67,7 @@ export function ServiceNetworksDialog({
   app,
   service,
   joined,
+  containers = [],
   busy,
   error = null,
   onSave,
@@ -64,7 +85,33 @@ export function ServiceNetworksDialog({
     enabled: open,
     retry: false,
   });
+  const inspected = useQueries({
+    queries: containers.map((container) => ({
+      queryKey: queryKeys.deployContainer(serverId, container.id),
+      queryFn: () => window.runova.deployDocker.inspect(serverId, container.id),
+      enabled: open,
+      retry: false,
+    })),
+  });
   const byName = new Map((networks.data ?? []).map((network) => [network.name, network]));
+
+  function addressesOn(network: string): AddressesState {
+    const addresses: ServiceAddress[] = [];
+    for (const read of inspected) {
+      const on = read.data?.networks.find((entry) => entry.network === network);
+      if (read.data && on && (on.ipAddress || on.ipv6Address)) {
+        addresses.push({
+          container: read.data.summary.name,
+          ipv4: on.ipAddress || undefined,
+          ipv6: on.ipv6Address || undefined,
+        });
+      }
+    }
+    if (addresses.length > 0) return { kind: 'found', addresses };
+    if (inspected.some((read) => read.isPending)) return { kind: 'reading' };
+    if (inspected.some((read) => read.isError)) return { kind: 'failed' };
+    return { kind: 'found', addresses };
+  }
   const options = joinableNetworks(networks.data ?? [], app, joined).map((network) => ({
     value: network.name,
     label: network.name,
@@ -149,6 +196,9 @@ export function ServiceNetworksDialog({
                 <JoinedRow
                   key={name}
                   name={name}
+                  service={service}
+                  addresses={addressesOn(name)}
+                  several={containers.length > 1}
                   info={byName.get(name)}
                   missing={networks.isSuccess && !byName.has(name)}
                   busy={busy}
@@ -179,33 +229,47 @@ export function ServiceNetworksDialog({
 
 function JoinedRow({
   name,
+  service,
+  addresses,
+  several,
   info,
   missing,
   busy,
   onRemove,
 }: {
   name: string;
+  service: string;
+  addresses: AddressesState;
+  /** The service runs more than one container, so each address names its container. */
+  several: boolean;
   info?: NetworkInfo;
   missing: boolean;
   busy: boolean;
   onRemove: () => void;
 }): React.JSX.Element {
   return (
-    <li aria-label={name} className="flex min-w-0 items-center gap-2 px-3 py-2">
-      <NetworkIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-      <span className="truncate font-mono text-sm text-foreground">{name}</span>
-      {info?.composeProject && (
-        <Chip className="h-5 px-1.5 text-[10px]">App {info.composeProject}</Chip>
-      )}
-      {missing && (
-        <Chip tone="warning" className="h-5 px-1.5 text-[10px]">
-          Not on the server
-        </Chip>
-      )}
+    <li aria-label={name} className="flex min-w-0 items-center gap-3 px-3 py-2.5">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-foreground/[0.05] text-muted-foreground">
+        <NetworkIcon className="h-3.5 w-3.5" />
+      </span>
+      <div className="min-w-0 flex-1 space-y-1">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="truncate font-mono text-sm text-foreground">{name}</span>
+          {info?.composeProject && (
+            <Chip className="h-5 px-1.5 text-[10px]">App {info.composeProject}</Chip>
+          )}
+          {missing && (
+            <Chip tone="warning" className="h-5 px-1.5 text-[10px]">
+              Not on the server
+            </Chip>
+          )}
+        </div>
+        <NetworkAddresses network={name} service={service} state={addresses} several={several} />
+      </div>
       <Button
         size="sm"
         variant="ghost"
-        className="ml-auto shrink-0 hover:bg-destructive/10 hover:text-destructive"
+        className="shrink-0 hover:bg-destructive/10 hover:text-destructive"
         aria-label={`Remove ${name}`}
         disabled={busy}
         onClick={onRemove}
@@ -214,5 +278,69 @@ function JoinedRow({
         Remove
       </Button>
     </li>
+  );
+}
+
+/** The service's addresses on one network, each one ready to copy. */
+function NetworkAddresses({
+  network,
+  service,
+  state,
+  several,
+}: {
+  network: string;
+  service: string;
+  state: AddressesState;
+  several: boolean;
+}): React.JSX.Element {
+  if (state.kind === 'reading') {
+    return (
+      <span
+        aria-hidden
+        className="block h-5 w-28 rounded-md bg-foreground/[0.06] motion-safe:animate-pulse"
+      />
+    );
+  }
+  if (state.kind === 'failed') {
+    return <p className="text-xs text-muted-foreground">Could not read the address.</p>;
+  }
+  if (state.addresses.length === 0) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        No address yet. {service} gets one once its container is on this network.
+      </p>
+    );
+  }
+  return (
+    <ul aria-label={`Addresses of ${service} on ${network}`} className="flex flex-wrap gap-1.5">
+      {state.addresses.map((address) => (
+        <li
+          key={address.container}
+          className="flex min-w-0 items-center gap-1.5 rounded-md bg-foreground/[0.04] py-0.5 pl-2 pr-0.5 ring-1 ring-inset ring-border/60"
+        >
+          {several && (
+            <span className="truncate text-[11px] text-muted-foreground">{address.container}</span>
+          )}
+          {address.ipv4 && <Address value={address.ipv4} />}
+          {address.ipv6 && <Address value={address.ipv6} muted />}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function Address({ value, muted = false }: { value: string; muted?: boolean }): React.JSX.Element {
+  return (
+    <span className="group flex min-w-0 items-center">
+      <span
+        className={cn(
+          'truncate font-mono text-xs',
+          muted ? 'text-muted-foreground' : 'text-foreground',
+        )}
+      >
+        {value}
+      </span>
+      <CopyButton text={value} label={`Copy the address ${value}`} className="h-5 w-5" />
+    </span>
   );
 }

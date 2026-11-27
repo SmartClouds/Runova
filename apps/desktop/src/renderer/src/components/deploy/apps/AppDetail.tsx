@@ -1042,6 +1042,7 @@ export function AppDetail({
             app={stack.name}
             service={networksFocus ?? ''}
             joined={networksOf(liveNetworks, networksFocus ?? '')}
+            containers={data.services.find((service) => service.name === networksFocus)?.containers}
             busy={networksSaving}
             error={networksError}
             onSave={(networks, change) => {

@@ -13,6 +13,7 @@ import {
   JOB_ID,
   SERVER,
   STACK_ID,
+  sampleContainerDetails,
   sampleDetails,
   sampleJob,
   sampleRevision,
@@ -278,6 +279,94 @@ describe('AppDetail', () => {
         networks: [{ service: 'web', networks: ['shared'] }],
       }),
     );
+  });
+
+  it('shows the address the service has on each network it joined', async () => {
+    const details = sampleDetails({
+      revisions: [
+        sampleRevision({ networks: [{ service: 'web', networks: ['ollama_default', 'shared'] }] }),
+      ],
+    });
+    const web = details.services[0].containers[0];
+    const inspect = vi.fn(async () =>
+      sampleContainerDetails(web, [
+        { network: 'shop_default', ipAddress: '172.20.0.2' },
+        { network: 'ollama_default', ipAddress: '172.21.0.3', ipv6Address: 'fd00::3' },
+      ]),
+    );
+    const { user } = renderDetail({ 'deployStacks.get': details, 'deployDocker.inspect': inspect });
+    const services = await screen.findByRole('list', { name: 'Services' });
+    await user.click(within(services).getByRole('button', { name: 'Networks of web' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Networks of web' });
+    const joined = within(dialog).getByRole('list', { name: 'Joined networks' });
+
+    const ollama = within(joined).getByRole('listitem', { name: 'ollama_default' });
+    const addresses = await within(ollama).findByRole('list', {
+      name: 'Addresses of web on ollama_default',
+    });
+    expect(within(addresses).getByText('172.21.0.3')).toBeInTheDocument();
+    expect(within(addresses).getByText('fd00::3')).toBeInTheDocument();
+    // One container, so its name would only repeat the service's.
+    expect(within(addresses).queryByText('shop-web-1')).toBeNull();
+    expect(
+      within(addresses).getByRole('button', { name: 'Copy the address 172.21.0.3' }),
+    ).toBeInTheDocument();
+
+    // Joined in the revision, but the container is not on it yet.
+    const shared = within(joined).getByRole('listitem', { name: 'shared' });
+    expect(await within(shared).findByText(/No address yet/)).toBeInTheDocument();
+    expect(inspect).toHaveBeenCalledWith(SERVER.id, web.id);
+  });
+
+  it('names each container next to its address when the service runs several', async () => {
+    const base = sampleDetails({
+      revisions: [sampleRevision({ networks: [{ service: 'web', networks: ['ollama_default'] }] })],
+    });
+    const first = base.services[0].containers[0];
+    const second = { ...first, id: 'c2', name: 'shop-web-2' };
+    const details = {
+      ...base,
+      services: [{ ...base.services[0], containers: [first, second] }, base.services[1]],
+    };
+    const ips: Record<string, string> = { c1: '172.21.0.3', c2: '172.21.0.4' };
+    const { user } = renderDetail({
+      'deployStacks.get': details,
+      'deployDocker.inspect': async (_server: string, id: string) =>
+        sampleContainerDetails(id === 'c1' ? first : second, [
+          { network: 'ollama_default', ipAddress: ips[id] },
+        ]),
+    });
+    const services = await screen.findByRole('list', { name: 'Services' });
+    await user.click(within(services).getByRole('button', { name: 'Networks of web' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Networks of web' });
+    const addresses = await within(dialog).findByRole('list', {
+      name: 'Addresses of web on ollama_default',
+    });
+    await waitFor(() =>
+      expect(
+        within(addresses)
+          .getAllByRole('listitem')
+          .map((item) => item.textContent),
+      ).toEqual(['shop-web-1172.21.0.3', 'shop-web-2172.21.0.4']),
+    );
+  });
+
+  it('says when the addresses could not be read', async () => {
+    const { user } = renderDetail({
+      'deployStacks.get': sampleDetails({
+        revisions: [
+          sampleRevision({ networks: [{ service: 'web', networks: ['ollama_default'] }] }),
+        ],
+      }),
+      'deployDocker.inspect': async () => {
+        throw new Error('No such container: shop-web-1');
+      },
+    });
+    const services = await screen.findByRole('list', { name: 'Services' });
+    await user.click(within(services).getByRole('button', { name: 'Networks of web' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Networks of web' });
+    const row = within(dialog).getByRole('listitem', { name: 'ollama_default' });
+    expect(await within(row).findByText('Could not read the address.')).toBeInTheDocument();
   });
 
   it('keeps the error in the networks dialog when the core refuses', async () => {

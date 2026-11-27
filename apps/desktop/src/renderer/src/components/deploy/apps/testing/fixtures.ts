@@ -1,4 +1,7 @@
 import type {
+  ContainerDetails,
+  ContainerNetwork,
+  ContainerSummary,
   JobInfo,
   NetworkInfo,
   StackDetails,
@@ -143,6 +146,27 @@ export function sampleDetails(extra: Partial<StackDetails> = {}): StackDetails {
       { name: 'db', image: 'postgres:17', ports: [], containers: [] },
     ],
     ...extra,
+  };
+}
+
+/** What the core reads of one container in full, with the networks it is on. */
+export function sampleContainerDetails(
+  summary: ContainerSummary,
+  networks: ContainerNetwork[],
+): ContainerDetails {
+  return {
+    summary,
+    command: [],
+    entrypoint: [],
+    envKeys: [],
+    labels: [],
+    mounts: [],
+    networks,
+    restartPolicy: 'unless-stopped',
+    restartCount: 0,
+    tty: false,
+    privileged: false,
+    oomKilled: false,
   };
 }
 
