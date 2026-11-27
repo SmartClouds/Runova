@@ -199,9 +199,12 @@ export function LinkEnvFileDialog({
                     key={choice.path}
                     className={cn(
                       'flex cursor-pointer items-center gap-3 rounded-md border px-3 py-2 transition-colors',
-                      'has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring',
+                      // The list scrolls, so anything drawn outside a row (a ring is a shadow
+                      // outside the border) gets clipped. Selection uses the border, focus an
+                      // inset ring.
+                      'has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-inset has-[:focus-visible]:ring-ring',
                       checked
-                        ? 'bg-primary/10 ring-1 ring-primary/60'
+                        ? 'border-primary/60 bg-primary/10'
                         : 'border-border bg-secondary/30 hover:bg-accent',
                     )}
                   >
