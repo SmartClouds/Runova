@@ -5,7 +5,7 @@
 
 FROM mcr.microsoft.com/dotnet/sdk:11.0 AS build
 WORKDIR /src
-ARG VERSION=4.2.0
+ARG VERSION=4.3.0
 # The commit CD builds, which the healthcheck reports as its releaseId. Empty leaves it out.
 ARG SOURCE_REVISION=
 
@@ -38,7 +38,7 @@ RUN if [ -n "$SYSTEM_PROTOC" ]; then export PROTOBUF_PROTOC=/usr/bin/protoc; fi 
 RUN mkdir -p /data/media
 
 FROM mcr.microsoft.com/dotnet/aspnet:11.0-resolute-chiseled AS runtime
-ARG VERSION=4.2.0
+ARG VERSION=4.3.0
 WORKDIR /app
 COPY --from=build --chown=1654:1654 /data /var/lib/runova
 COPY --from=build /app ./

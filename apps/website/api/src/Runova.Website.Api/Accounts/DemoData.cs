@@ -47,8 +47,8 @@ internal static class DemoData
     public static SessionListDto Sessions(DateTimeOffset now) =>
         new(
         [
-            new(DemoAccount.SessionId, AccountSessionKinds.Mobile, DeviceTokenEndpoints.PhoneDeviceName, "Phone", "4.2.0", null, now.AddMinutes(-2), now, Current: true),
-            new(-2, AccountSessionKinds.Desktop, "Demo workstation", "Windows", "4.2.0", "203.0.113.24", now.AddDays(-30), now.AddMinutes(-3), Current: false),
+            new(DemoAccount.SessionId, AccountSessionKinds.Mobile, DeviceTokenEndpoints.PhoneDeviceName, "Phone", "4.3.0", null, now.AddMinutes(-2), now, Current: true),
+            new(-2, AccountSessionKinds.Desktop, "Demo workstation", "Windows", "4.3.0", "203.0.113.24", now.AddDays(-30), now.AddMinutes(-3), Current: false),
             new(-3, AccountSessionKinds.Web, "Firefox on macOS", "macOS", null, "198.51.100.17", now.AddHours(-5), now.AddHours(-4), Current: false),
         ]);
 

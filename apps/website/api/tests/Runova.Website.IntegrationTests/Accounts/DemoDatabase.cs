@@ -73,7 +73,7 @@ internal static class DemoRequests
     {
         grantType = "demo",
         platform,
-        appVersion = "4.2.0",
+        appVersion = "4.3.0",
         deviceId = Guid.NewGuid(),
     };
 

@@ -23,7 +23,7 @@ android {
         minSdk = 26
         targetSdk = 37
         versionCode = (findProperty("appVersionCode") as String?)?.toInt() ?: 1
-        versionName = (findProperty("appVersionName") as String?) ?: "4.2.0"
+        versionName = (findProperty("appVersionName") as String?) ?: "4.3.0"
 
         // Empty until a Firebase project exists. The app then simply asks for no push token.
         for ((field, variable) in listOf(
