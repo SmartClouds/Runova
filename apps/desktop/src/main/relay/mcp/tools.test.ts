@@ -31,7 +31,7 @@ const HANDOFF = (outcome: string, next = 'Nothing.') =>
     next,
   ].join('\n');
 
-function driver() {
+function driver(options: Record<string, unknown> = {}) {
   const leg = {
     taskId: 'T002',
     legNo: 1,
@@ -44,7 +44,7 @@ function driver() {
   const relay = {
     projectId: 'p1',
     docsFolder: 'docs',
-    options: { guardShare: 0.8, commitPerTask: true },
+    options: { guardShare: 0.8, commitPerTask: true, ...options },
   };
   return {
     legForSession: vi.fn((tabId: string) => (tabId === 'tab-1' ? { relay, leg } : null)),
@@ -115,6 +115,13 @@ describe('handleRelayMcp', () => {
     const { ctx } = context();
     const answer = await handleRelayMcp(ctx, { sessionId: 'tab-1', tool: 'context_status' });
     expect(answer.payload.text).toBe('About 50K of 200K tokens used (25%). Hand off at 80%.');
+  });
+
+  it('says there is no limit when the relay runs past the budget', async () => {
+    const { ctx } = context(driver({ runPastBudget: true }));
+    const answer = await handleRelayMcp(ctx, { sessionId: 'tab-1', tool: 'context_status' });
+    expect(answer.payload.text).toMatch(/no limit/);
+    expect(answer.payload.text).not.toMatch(/Hand off at/);
   });
 
   it('checks the handoff before it records the end of a leg', async () => {

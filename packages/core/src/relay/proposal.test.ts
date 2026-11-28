@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseHandoff, parseTaskFile, renderTaskFile } from './parse.js';
-import { applyProposal, diffProposal, parsePlanProposal } from './proposal.js';
+import { applyProposal, diffProposal, parsePlanProposal, withBudget } from './proposal.js';
 import type { RelayTask } from './types.js';
 
 function existing(
@@ -83,6 +83,28 @@ describe('applyProposal', () => {
       ['T005', 'After it', ['T004']],
     ]);
     expect(plan.remove).toEqual([]);
+  });
+
+  it('writes the budget a proposal was planned for into its new tasks', () => {
+    const proposal = withBudget(
+      {
+        summary: '',
+        add: [{ title: 'Planned' }, { title: 'Own budget', budget: 400_000 }],
+        change: [{ id: 'T003', title: 'Renamed' }],
+        split: [{ id: 'T002', into: [{ title: 'Part one' }] }],
+        remove: [],
+      },
+      100_000,
+    );
+    const written = applyProposal(board, proposal).write.map((file) =>
+      parseTaskFile(file.file, file.content),
+    );
+    expect(Object.fromEntries(written.map((task) => [task.title, task.budget]))).toMatchObject({
+      Planned: 100_000,
+      'Own budget': 400_000,
+      'Part one': 100_000,
+    });
+    expect(proposal.change).toEqual([{ id: 'T003', title: 'Renamed' }]);
   });
 
   it('changes a task but never a done one', () => {

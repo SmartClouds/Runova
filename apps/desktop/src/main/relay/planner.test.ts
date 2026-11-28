@@ -68,6 +68,21 @@ describe('timeouts', () => {
 });
 
 describe('decomposeRequest', () => {
+  it('lets tasks stay bigger than a session when asked, or when the project keeps rolling', async () => {
+    cli.run.mockResolvedValue({ ok: true, text: ANSWER, cliName: 'Claude Code' });
+    const { decomposeRequest } = await import('./planner');
+    await decomposeRequest({ requestId: 'r2', projectId: 'p1', request: 'x' });
+    expect(cli.run.mock.calls[0][0]).toMatch(/Split anything larger/);
+
+    await decomposeRequest({ requestId: 'r3', projectId: 'p1', request: 'x', keepRolling: true });
+    expect(cli.run.mock.calls[1][0]).toMatch(/carries on in a new session/);
+
+    const store = await import('./store');
+    await store.saveRelaySettings('p1', { options: { keepRolling: true } });
+    await decomposeRequest({ requestId: 'r4', projectId: 'p1', request: 'x' });
+    expect(cli.run.mock.calls[2][0]).toMatch(/carries on in a new session/);
+  });
+
   it('runs the planner in the project, read-only, with the chosen model', async () => {
     cli.run.mockResolvedValue({ ok: true, text: `Plan:\n${ANSWER}`, cliName: 'Claude Code' });
     const { decomposeRequest } = await import('./planner');

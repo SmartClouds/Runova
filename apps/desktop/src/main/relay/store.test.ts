@@ -99,6 +99,42 @@ describe('relay settings', () => {
     expect(onDisk.projects.p1.settings.options.planFirst).toBe(true);
   });
 
+  it('reads settings saved before the over-budget options, and saves them', async () => {
+    userData.writeData('projects.json', [project('p1')]);
+    const { keepRolling: _k, runPastBudget: _r, ...olderOptions } = DEFAULT_RELAY_OPTIONS;
+    userData.writeData('relay.json', {
+      version: 1,
+      projects: {
+        p1: {
+          settings: {
+            docsFolder: 'docs',
+            defaults: { cliId: 'claude-code', model: null, effort: null, autoSize: false },
+            overrides: {},
+            options: { ...olderOptions, planFirst: true },
+          },
+          relays: [],
+          legs: [],
+        },
+      },
+    });
+    const store = await import('./store');
+    const older = await store.relaySettings('p1');
+    expect(older.options).toMatchObject({
+      planFirst: true,
+      keepRolling: false,
+      runPastBudget: false,
+    });
+    const saved = await store.saveRelaySettings('p1', {
+      options: { keepRolling: true, runPastBudget: true },
+    });
+    expect(saved.options).toMatchObject({
+      planFirst: true,
+      keepRolling: true,
+      runPastBudget: true,
+    });
+    expect((await store.relaySettings('p1')).options.keepRolling).toBe(true);
+  });
+
   it('refuses a project it does not know', async () => {
     const store = await import('./store');
     await expect(store.relaySettings('nope')).rejects.toThrow(/project/i);

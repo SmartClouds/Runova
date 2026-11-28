@@ -461,6 +461,51 @@ describe('outcomes', () => {
     expect(capped.state.current?.awaiting?.reason).toBe('leg-cap');
   });
 
+  /** Runs `legs` continue handoffs, each with new content, and returns the state after the last. */
+  function rollOn(state: RelayState, legs: number) {
+    let next = { state, effects: [] as RelayEffect[] };
+    for (let leg = 1; leg <= legs; leg++) {
+      const at = T0 + leg * 20_000;
+      next = finish(next.state, handoff({ outcome: 'continue', hash: `h${leg}`, mtimeMs: at }), at);
+      if (next.state.status !== 'running') return next;
+      next = feed(next.state, {
+        type: 'launched',
+        legId: next.state.current!.legId,
+        tabId: `tab-${leg + 1}`,
+        handoffMtimeAtStart: at,
+        now: at + 1_000,
+      });
+    }
+    return next;
+  }
+
+  it('keeps handing off past the cap when told to keep rolling', () => {
+    const { state } = running(relay({ relayOptions: { maxLegsPerTask: 2, keepRolling: true } }));
+    const next = rollOn(state, 5);
+    expect(next.state.status).toBe('running');
+    expect(next.state.current).toMatchObject({ taskId: 'T001', legNo: 6 });
+    expect(next.state.current?.awaiting ?? null).toBeNull();
+  });
+
+  it('still pauses on two identical handoffs when told to keep rolling', () => {
+    let { state } = running(relay({ relayOptions: { keepRolling: true } }));
+    state = finish(state, handoff({ outcome: 'continue', hash: 'same' })).state;
+    state = feed(state, {
+      type: 'launched',
+      legId: state.current!.legId,
+      tabId: 'tab-2',
+      handoffMtimeAtStart: T0 + 5_000,
+      now: T0 + 10_000,
+    }).state;
+    const stuck = finish(
+      state,
+      handoff({ outcome: 'continue', hash: 'same', mtimeMs: T0 + 20_000 }),
+      T0 + 20_000,
+    );
+    expect(stuck.state.status).toBe('paused');
+    expect(stuck.state.current?.awaiting?.reason).toBe('no-progress');
+  });
+
   it('marks a blocked task, pauses and quotes its question', () => {
     const { state } = running();
     const next = finish(state, handoff({ outcome: 'blocked', next: 'Postgres or SQLite?' }));
@@ -915,6 +960,26 @@ describe('the context guard', () => {
     });
     expect(of(later.effects, 'armGuard')).toEqual([]);
     expect(of(later.effects, 'notify')).toEqual([]);
+  });
+
+  it('never arms, and never says the budget is too small, when running past the budget', () => {
+    const tasks = [snapshot('T001', { budget: 30_000 })];
+    const { state } = running(relay({ tasks, relayOptions: { runPastBudget: true } }));
+    const first = feed(state, {
+      type: 'contextUsage',
+      tabId: 'tab-1',
+      tokens: 51_000,
+      window: null,
+    });
+    const later = feed(first.state, {
+      type: 'contextUsage',
+      tabId: 'tab-1',
+      tokens: 400_000,
+      window: null,
+    });
+    expect([...of(first.effects, 'armGuard'), ...of(later.effects, 'armGuard')]).toEqual([]);
+    expect([...of(first.effects, 'notify'), ...of(later.effects, 'notify')]).toEqual([]);
+    expect(later.state.current?.peakContextTokens).toBe(400_000);
   });
 
   it('never arms for a CLI without hooks', () => {

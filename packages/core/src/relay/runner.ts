@@ -35,6 +35,13 @@ export interface RelayOptions {
   commitPerTask: boolean;
   closeFinishedTabs: boolean;
   defaultBudget: number;
+  /**
+   * A task may take as many sessions as it needs: the session limit never pauses the relay. Two
+   * sessions in a row that leave the same handoff still do.
+   */
+  keepRolling: boolean;
+  /** No session is told to hand off because of its context; the CLI compacts its own. */
+  runPastBudget: boolean;
 }
 
 export const DEFAULT_RELAY_OPTIONS: RelayOptions = {
@@ -46,6 +53,8 @@ export const DEFAULT_RELAY_OPTIONS: RelayOptions = {
   commitPerTask: true,
   closeFinishedTabs: true,
   defaultBudget: 200_000,
+  keepRolling: false,
+  runPastBudget: false,
 };
 
 export const RELAY_TIMING = {
@@ -487,7 +496,7 @@ function completeLeg(step: Step, now: number): void {
       pause(step, `${taskId} made no progress.`);
       return;
     }
-    if (legs >= step.state.options.maxLegsPerTask) {
+    if (!step.state.options.keepRolling && legs >= step.state.options.maxLegsPerTask) {
       await_(step, 'leg-cap', `${taskId} used all ${legs} sessions it may take.`, {
         level: 'warning',
         title: `${taskId} needs more sessions`,
@@ -764,6 +773,7 @@ function onContext(step: Step, tokens: number, window: number | null): void {
   const peak = Math.max(leg.peakContextTokens ?? 0, tokens);
   patchLeg(step, { contextTokens: tokens, peakContextTokens: peak, window: window ?? leg.window });
   if (!leg.exact || leg.guardSent || leg.guardArmed || !leg.tabId) return;
+  if (step.state.options.runPastBudget) return;
   if (relayCapabilities(leg.choice.cliId).contextGuard !== 'hook') return;
   const threshold = guardThreshold({
     budget: leg.budget,

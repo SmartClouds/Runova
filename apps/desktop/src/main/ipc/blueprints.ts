@@ -47,6 +47,8 @@ const relaySettingSchema = z
   .object({
     enabled: z.boolean(),
     budgetTokens: z.number().int().min(10_000).max(2_000_000),
+    keepRolling: z.boolean().optional(),
+    runPastBudget: z.boolean().optional(),
   })
   .strict();
 

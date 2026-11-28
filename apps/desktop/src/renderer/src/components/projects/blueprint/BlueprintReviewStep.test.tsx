@@ -69,7 +69,12 @@ function renderStep(
     finalPrompt?: string;
     installed?: string[];
     onGenerate?: (choice: unknown) => Promise<string | null>;
-    relay?: { enabled: boolean; budgetTokens: number };
+    relay?: {
+      enabled: boolean;
+      budgetTokens: number;
+      keepRolling?: boolean;
+      runPastBudget?: boolean;
+    };
   } = {},
 ) {
   const onGenerate = vi.fn(options.onGenerate ?? (async () => 'New prompt'));
@@ -231,6 +236,36 @@ describe('BlueprintReviewStep Relay split', () => {
 
     expect(await screen.findByRole('dialog', { name: 'Run dialog' })).toBeInTheDocument();
     expect(bridge.$fn('relay.ensureGuide')).toHaveBeenCalledWith('p1', 'docs');
+    expect(bridge.$fn('relay.saveSettings')).toHaveBeenCalledWith('p1', {
+      options: { keepRolling: false, runPastBudget: false },
+    });
+  });
+
+  it('offers the over-budget choices only while the split is on', async () => {
+    renderStep();
+    expect(screen.queryByRole('checkbox', { name: /Keep handing off/ })).not.toBeInTheDocument();
+  });
+
+  it('keeps big tasks rolling and runs past the budget when asked', async () => {
+    const { user, onRelayChange, bridge } = renderStep({
+      finalPrompt: 'Plan it',
+      relay: { enabled: true, budgetTokens: 200_000, keepRolling: true },
+    });
+    expect(screen.getByRole('checkbox', { name: /Keep handing off/ })).toBeChecked();
+
+    await user.click(screen.getByRole('checkbox', { name: /Run past the budget/ }));
+    expect(onRelayChange).toHaveBeenCalledWith({
+      enabled: true,
+      budgetTokens: 200_000,
+      keepRolling: true,
+      runPastBudget: true,
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Run in CLI' }));
+    await screen.findByRole('dialog', { name: 'Run dialog' });
+    expect(bridge.$fn('relay.saveSettings')).toHaveBeenCalledWith('p1', {
+      options: { keepRolling: true, runPastBudget: false },
+    });
   });
 
   it('leaves the project alone when the split is off', async () => {

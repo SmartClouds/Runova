@@ -198,6 +198,7 @@ export function createRelayDriver(deps: RelayDriverDeps): RelayDriver {
 
   function guardAt(relay: RelayState, leg: RelayLeg): number | null {
     if (relayCapabilities(leg.choice.cliId).contextGuard !== 'hook' || !leg.exact) return null;
+    if (relay.options.runPastBudget) return null;
     return guardThreshold({
       budget: leg.budget,
       share: relay.options.guardShare,

@@ -349,6 +349,26 @@ export function RelayRunSettingsForm({
               onChange={(defaultBudget) => void save({ options: { defaultBudget } })}
             />
           </Row>
+          <Row
+            label="Keep handing off"
+            hint="No limit on sessions for a task bigger than the budget."
+          >
+            <Switch
+              aria-label="Keep handing off"
+              checked={settings.options.keepRolling ?? false}
+              onCheckedChange={(keepRolling) => void save({ options: { keepRolling } })}
+            />
+          </Row>
+          <Row
+            label="Run past the budget"
+            hint="Sessions are never told to hand off for their context."
+          >
+            <Switch
+              aria-label="Run past the budget"
+              checked={settings.options.runPastBudget ?? false}
+              onCheckedChange={(runPastBudget) => void save({ options: { runPastBudget } })}
+            />
+          </Row>
           <Row label="Commit when done" hint="One commit per task, only its own files.">
             <Switch
               aria-label="Commit when done"

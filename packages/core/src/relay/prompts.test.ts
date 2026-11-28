@@ -33,6 +33,13 @@ describe('buildLegPrompt', () => {
     expect(prompt).toContain('200K');
   });
 
+  it('sets no context limit when the relay runs past the budget', () => {
+    const prompt = buildLegPrompt({ ...base, runPastBudget: true });
+    expect(prompt).not.toContain('200K');
+    expect(prompt).toMatch(/no context limit/i);
+    expect(prompt).toContain('docs/tasks/handoffs/T003.md');
+  });
+
   it('asks for test-first work and a commit of only this task', () => {
     const prompt = buildLegPrompt(base);
     expect(prompt).toMatch(/test/i);
@@ -107,6 +114,24 @@ describe('buildDecomposeRequest', () => {
     expect(request).toContain('T001 Login (done)');
     expect(request).toContain(RELAY_PROPOSAL_SHAPE);
     expect(request).toMatch(/only the JSON/i);
+    expect(request).toMatch(/Split anything larger/);
+    expect(request).not.toContain('—');
+  });
+
+  it('lets a task stay bigger than one session when it keeps rolling', () => {
+    const request = buildDecomposeRequest({
+      projectName: 'CuraLink',
+      request: 'Add a patient search page with filters',
+      docsFolder: 'docs',
+      budget: 200_000,
+      keepRolling: true,
+      firstId: 'T014',
+      existing: [],
+    });
+    expect(request).not.toMatch(/Split anything larger/);
+    expect(request).toMatch(/carries on in a new session/);
+    expect(request).toMatch(/keep a piece of work whole/);
+    expect(request).toContain('200K');
     expect(request).not.toContain('—');
   });
 });
@@ -186,6 +211,15 @@ describe('blueprintRelaySection', () => {
     expect(section).toContain('200K');
     expect(section).toContain('T001');
     expect(section).toContain('status: todo');
+    expect(section).toMatch(/Split any task that would need more/);
+    expect(section).not.toContain('—');
+  });
+
+  it('lets tasks run over several sessions when they keep rolling', () => {
+    const section = blueprintRelaySection('docs', 200_000, true);
+    expect(section).not.toMatch(/Split any task that would need more/);
+    expect(section).toMatch(/carries on in a new session/);
+    expect(section).toContain('budget: 200000');
     expect(section).not.toContain('—');
   });
 });

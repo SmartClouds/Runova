@@ -55,6 +55,9 @@ const optionsSchema = z.object({
   commitPerTask: z.boolean(),
   closeFinishedTabs: z.boolean(),
   defaultBudget: z.number().int().min(10_000).max(10_000_000),
+  // Optional so settings saved before these existed still read; relaySettings fills them in.
+  keepRolling: z.boolean().optional(),
+  runPastBudget: z.boolean().optional(),
 });
 
 const overrideSchema = z.object({

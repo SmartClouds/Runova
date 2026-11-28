@@ -39,6 +39,18 @@ describe('RelayRunSettingsForm', () => {
     });
   });
 
+  it('saves the two over-budget options', async () => {
+    const { user, bridge } = renderForm();
+    await user.click(screen.getByRole('switch', { name: 'Keep handing off' }));
+    expect(bridge.$fn('relay.saveSettings')).toHaveBeenLastCalledWith('p1', {
+      options: { keepRolling: true },
+    });
+    await user.click(screen.getByRole('switch', { name: 'Run past the budget' }));
+    expect(bridge.$fn('relay.saveSettings')).toHaveBeenLastCalledWith('p1', {
+      options: { runPastBudget: true },
+    });
+  });
+
   it('turns plan first on for every task', async () => {
     const { user, bridge } = renderForm();
     await user.click(screen.getByRole('switch', { name: 'Plan first' }));

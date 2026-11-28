@@ -98,6 +98,7 @@ export async function decomposeRequest(input: RelayDecomposeInput): Promise<Rela
     request: input.request,
     docsFolder: settings.docsFolder,
     budget: input.budget ?? settings.options.defaultBudget,
+    keepRolling: input.keepRolling ?? settings.options.keepRolling,
     firstId: nextTaskId(board.files.map((file) => file.task.id)),
     existing: board.files.map((file) => ({
       id: file.task.id,
@@ -115,6 +116,7 @@ export async function reviseBoard(input: RelayReviseInput): Promise<RelayPlanner
     projectName: project.name,
     docsFolder: settings.docsFolder,
     budget: input.budget ?? settings.options.defaultBudget,
+    keepRolling: input.keepRolling ?? settings.options.keepRolling,
     firstId: nextTaskId(board.files.map((file) => file.task.id)),
     tasks: boardTasks(board),
     note: input.note,
@@ -129,6 +131,7 @@ export async function catchUpBoard(input: RelayCatchUpInput): Promise<RelayPlann
     projectName: project.name,
     docsFolder: settings.docsFolder,
     budget: input.budget ?? settings.options.defaultBudget,
+    keepRolling: input.keepRolling ?? settings.options.keepRolling,
     firstId: nextTaskId(board.files.map((file) => file.task.id)),
     tasks: boardTasks(board),
     recordDone: input.recordDone,

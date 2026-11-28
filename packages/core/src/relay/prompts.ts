@@ -20,6 +20,8 @@ export interface LegPromptInput {
   /** The Runova relay MCP server is available to this session. */
   mcp: boolean;
   planFirst: boolean;
+  /** The relay runs past the budget: the session is never asked to hand off for its context. */
+  runPastBudget?: boolean;
 }
 
 /**
@@ -68,7 +70,9 @@ export function buildLegPrompt(input: LegPromptInput): string {
   }
   lines.push(
     'Work test-first: a failing test for each acceptance criterion, then the code, then a refactor with the tests green.',
-    `This session may use ${formatTokenCount(input.budget)} tokens of context. When you near it, or Runova says it is reached, finish the current step, write the handoff with outcome: continue and stop.`,
+    input.runPastBudget
+      ? 'This session has no context limit from Runova. Keep going until the task is done or blocked; let the CLI compact its context when it needs to.'
+      : `This session may use ${formatTokenCount(input.budget)} tokens of context. When you near it, or Runova says it is reached, finish the current step, write the handoff with outcome: continue and stop.`,
     `Before you stop, rewrite ${handoff}: all five sections, outcome, tests and leg: ${legNo}.`,
   );
   if (input.commitPerTask) {
@@ -103,8 +107,11 @@ export const RELAY_PROPOSAL_SHAPE = `{
   "remove": [{ "id": "T009", "reason": "Why it is no longer needed" }]
 }`;
 
-function sizingRules(budget: number): string {
+function sizingRules(budget: number, keepRolling = false): string {
   const ceiling = formatTokenCount(Math.round(budget * TIGHT_ESTIMATE_SHARE));
+  if (keepRolling) {
+    return `Every task runs in fresh AI coding sessions of up to ${formatTokenCount(budget)} tokens of context each. A task that needs more carries on in a new session from its handoff, so a task may be bigger than one session. Give each task an "estimate" of the context it needs in tokens (everything it reads: the task, the specs and code it opens, and the output of its commands and tests). Aim for ${ceiling} or less, but keep a piece of work whole when splitting it would leave a part that can not be tested on its own. Every task must end with something that can be tested.`;
+  }
   return `Every task runs in its own fresh AI coding session that may use at most ${formatTokenCount(budget)} tokens of context. That covers everything the session reads: the task, the specs and code it opens, and the output of the commands and tests it runs. Give each task an "estimate" of that context in tokens and keep it at or under ${ceiling}. Split anything larger. Every task must end with something that can be tested.`;
 }
 
@@ -113,6 +120,8 @@ export interface DecomposeInput {
   request: string;
   docsFolder: string;
   budget: number;
+  /** A task may be bigger than one session: it rolls on to fresh sessions until it is done. */
+  keepRolling?: boolean;
   firstId: string;
   existing: { id: string; title: string; status: RelayTaskStatus }[];
 }
@@ -127,7 +136,7 @@ export function buildDecomposeRequest(input: DecomposeInput): string {
 
 Break the request below into tasks for Runova Relay, which runs them one after another.
 
-${sizingRules(input.budget)}
+${sizingRules(input.budget, input.keepRolling)}
 
 Number the new tasks from ${input.firstId} upward, in the order they should run. Use "depends" for tasks that must be done first, including tasks already on the board. Link the docs a task implements under "specs" (paths relative to the repository; the task files live in ${tasksFolderRelPath(input.docsFolder)}/).
 
@@ -148,6 +157,7 @@ export interface ReviseInput {
   projectName: string;
   docsFolder: string;
   budget: number;
+  keepRolling?: boolean;
   firstId: string;
   tasks: {
     id: string;
@@ -183,7 +193,7 @@ Compare the tasks with the docs and propose what should change so the tasks deli
 - split tasks that are too big for one session;
 - remove tasks the docs no longer need.
 
-${sizingRules(input.budget)}
+${sizingRules(input.budget, input.keepRolling)}
 
 Rules:
 - Never change, split or remove a task that is done.
@@ -232,6 +242,7 @@ export interface CatchUpInput {
   projectName: string;
   docsFolder: string;
   budget: number;
+  keepRolling?: boolean;
   firstId: string;
   tasks: ReviseInput['tasks'];
   /** Put finished work on the board as done tasks. */
@@ -271,7 +282,7 @@ Work out where the project stands:
 
 Then plan the rest as tasks that Runova Relay runs one after another.
 
-${sizingRules(input.budget)}
+${sizingRules(input.budget, input.keepRolling)}
 
 How to record what you find:
 ${finished}
@@ -297,16 +308,26 @@ ${CATCH_UP_PROPOSAL_SHAPE}`;
  * The part of a Blueprint prompt that asks for Relay task files in place of a backlog. Runova
  * writes the guide into the project before the prompt runs.
  */
-export function blueprintRelaySection(docsFolder: string, budget: number): string {
+export function blueprintRelaySection(
+  docsFolder: string,
+  budget: number,
+  keepRolling = false,
+): string {
   const tasks = `${tasksFolderRelPath(docsFolder)}/`;
   const ceiling = formatTokenCount(Math.round(budget * TIGHT_ESTIMATE_SHARE));
-  return `Write the backlog as task files in \`${tasks}\`; there is no separate backlog file. Runova runs them one after another, each in a fresh AI coding session that may use at most ${formatTokenCount(budget)} tokens of context, so every task must be small enough to finish within that budget.
+  const sessions = keepRolling
+    ? `each in fresh AI coding sessions of up to ${formatTokenCount(budget)} tokens of context. A task that needs more carries on in a new session from its handoff, so keep a piece of work whole rather than split it into parts that can not be tested on their own.`
+    : `each in a fresh AI coding session that may use at most ${formatTokenCount(budget)} tokens of context, so every task must be small enough to finish within that budget.`;
+  const sizing = keepRolling
+    ? `an \`estimate\` of the context the task needs (the task, the specs and code it reads, and the output of the tests it runs), aiming for ${ceiling} or less, so every task ends with something testable;`
+    : `an \`estimate\` of the context one session needs (the task, the specs and code it reads, and the output of the tests it runs), at or under ${ceiling}. Split any task that would need more, so every task ends with something testable;`;
+  return `Write the backlog as task files in \`${tasks}\`; there is no separate backlog file. Runova runs them one after another, ${sessions}
 
 Runova has put the format in \`${guideRelPath(docsFolder)}\`. Read it and follow it exactly:
 - one file per task, named like \`T001-short-slug.md\`, numbered in delivery order from T001;
 - YAML front matter with \`id\`, \`title\`, \`status: todo\`, \`epic\`, \`order\`, \`depends\`, \`estimate\`, \`budget: ${budget}\` and \`specs\`;
 - the sections Goal, Scope, Acceptance criteria (one checkbox each) and Test plan;
-- an \`estimate\` of the context one session needs (the task, the specs and code it reads, and the output of the tests it runs), at or under ${ceiling}. Split any task that would need more, so every task ends with something testable;
+- ${sizing}
 - \`depends\` lists only the tasks that must be done first, and \`specs\` links the epic the task belongs to.
 
 Link each epic to its task files. Do not write any handoff files; each session writes its own.`;

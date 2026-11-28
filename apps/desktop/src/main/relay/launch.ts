@@ -147,6 +147,7 @@ export async function launchRelayLeg(request: LegLaunchRequest): Promise<LegLaun
     commitPerTask: relay.options.commitPerTask,
     mcp: mcpArgs.length > 0,
     planFirst: request.planFirst,
+    runPastBudget: relay.options.runPastBudget,
   });
   const { command, promptInCommand } = buildLegCommand({
     cliId: choice.cliId,

@@ -31,6 +31,29 @@ describe('blueprints:setRelay', () => {
     expect(again.relay).toEqual({ enabled: true, budgetTokens: 400_000 });
   });
 
+  it('saves the over-budget options with the budget', async () => {
+    await register();
+    const saved = await invoke<ProjectBlueprint>(IPC.blueprints.setRelay, 'p1', {
+      enabled: true,
+      budgetTokens: 200_000,
+      keepRolling: true,
+      runPastBudget: false,
+    });
+    expect(saved.relay).toEqual({
+      enabled: true,
+      budgetTokens: 200_000,
+      keepRolling: true,
+      runPastBudget: false,
+    });
+    await expect(
+      invoke(IPC.blueprints.setRelay, 'p1', {
+        enabled: true,
+        budgetTokens: 200_000,
+        keepRolling: 'yes',
+      }),
+    ).rejects.toThrow();
+  });
+
   it('refuses a value that is not a Relay setting', async () => {
     await register();
     await expect(

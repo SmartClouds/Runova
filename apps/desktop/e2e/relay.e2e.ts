@@ -193,6 +193,50 @@ test('tells a session near its budget to hand off, and finishes the task in a fr
   expect(launches[1]).toMatch(/session 2/);
 });
 
+test('runs past the budget without a hand-off when told to', async () => {
+  test.setTimeout(120_000);
+  launched = await launchRelayApp();
+  const { page, projectDir } = launched;
+  seedTasks(projectDir, [['T001', 'Patient search', []]]);
+  write(projectDir, '.fake-relay.json', JSON.stringify({ context: { T001: [170_000] } }));
+  const projectId = await openWorkspace(launched);
+  await startRelay(page, {
+    projectId,
+    trigger: { kind: 'now' },
+    options: { runPastBudget: true },
+  });
+
+  await expect.poll(() => statusOf(projectDir, 'T001'), { timeout: 90_000 }).toBe('done');
+  const log = fakeLog(projectDir);
+  expect(log.some((entry) => entry.kind === 'guard')).toBe(false);
+  const launches = launched.claudeLaunches().filter((line) => line.includes('Runova Relay'));
+  expect(launches).toHaveLength(1);
+  expect(launches[0]).toMatch(/no context limit/);
+});
+
+test('keeps handing off past the session limit when told to keep rolling', async () => {
+  test.setTimeout(240_000);
+  launched = await launchRelayApp();
+  const { page, projectDir } = launched;
+  seedTasks(projectDir, [['T001', 'Patient search', []]]);
+  write(
+    projectDir,
+    '.fake-relay.json',
+    JSON.stringify({ legs: { T001: ['continue', 'continue', 'continue', 'done'] } }),
+  );
+  const projectId = await openWorkspace(launched);
+  await startRelay(page, {
+    projectId,
+    trigger: { kind: 'now' },
+    options: { maxLegsPerTask: 2, keepRolling: true },
+  });
+
+  await expect.poll(() => statusOf(projectDir, 'T001'), { timeout: 200_000 }).toBe('done');
+  const launches = launched.claudeLaunches().filter((line) => line.includes('Runova Relay'));
+  expect(launches).toHaveLength(4);
+  await expect.poll(async () => (await runsOf(page, projectId))[0]?.status).toBe('done');
+});
+
 test('pauses on a blocked handoff and leaves the task blocked', async () => {
   test.setTimeout(120_000);
   launched = await launchRelayApp();

@@ -194,6 +194,21 @@ function assignIds(board: readonly BoardFile[], proposal: RelayProposal): Assign
   return { added, parts, renamed };
 }
 
+/**
+ * Gives every new task in a proposal the budget it was planned for, unless the planner set its
+ * own. Without it a task runs with the project's default budget, not the one picked when it was
+ * split.
+ */
+export function withBudget(proposal: RelayProposal, budget: number): RelayProposal {
+  const fill = (task: ProposalTask): ProposalTask =>
+    task.budget === undefined ? { ...task, budget } : task;
+  return {
+    ...proposal,
+    add: proposal.add.map(fill),
+    split: proposal.split.map((split) => ({ ...split, into: split.into.map(fill) })),
+  };
+}
+
 export function applyProposal(board: readonly BoardFile[], proposal: RelayProposal): ProposalPlan {
   const byId = new Map(board.map((entry) => [entry.task.id, entry]));
   const warnings: string[] = [];

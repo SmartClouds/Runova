@@ -3,7 +3,7 @@ title: Relay tasks
 category: Build
 order: 15
 summary: Break work into tasks that each fit one AI session, run them one after another in fresh sessions, and carry what each session learned to the next through a handoff file.
-keywords: relay, tasks, task board, board, handoff, baton, context, context budget, 200k, session, split into tasks, split into relay tasks, revise with ai, plan first, auto mode, run relay, schedule, after a task, sdd, kanban, trello, mcp, runova_relay, finish_leg
+keywords: relay, tasks, task board, board, handoff, baton, context, context budget, 200k, session, split into tasks, split into relay tasks, revise with ai, plan first, auto mode, run relay, schedule, after a task, sdd, kanban, trello, mcp, runova_relay, finish_leg, over budget, keep handing off, run past the budget, session limit
 route: /workspace
 ---
 
@@ -54,6 +54,15 @@ Every session updates `docs/tasks/handoffs/T001.md` (for task T001) with five se
 - **blocked**: the relay pauses and tells you why.
 
 With Claude Code, Runova watches the session's real context use. When it passes 80% of the budget, the session is told to finish its current step, write the handoff and stop, so no session runs past its budget and long tasks still finish. If a session tries to stop without writing its handoff, it is asked to write it first.
+
+## Tasks bigger than the budget
+
+By default a task is split until it fits the budget, and a task that takes six sessions without finishing pauses the relay. Two options change that. You find them under **When a task is bigger than the budget** in **Split into tasks** and in the Blueprint, and as switches in Run settings. Both are saved for the project.
+
+- **Keep handing off.** The planner may leave a big task whole instead of cutting it into parts that can't be tested alone. Sessions still hand off near the budget, and a fresh one carries on, with no limit on how many sessions one task takes.
+- **Run past the budget.** No session is told to hand off because of its context. It keeps working and the CLI compacts its own context when it needs to. The handoff is still written when the session stops.
+
+You can turn on either one or both. In every mode the relay still pauses when two sessions in a row leave the same handoff, so a task that is stuck never runs forever.
 
 Runova keeps each task's status in its file. Agents only write handoffs. With **Commit when done** on (the default), each finished task is committed on its own, with only the files it changed.
 

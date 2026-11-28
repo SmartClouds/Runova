@@ -1,4 +1,4 @@
-import type { Project, ProjectBlueprint } from '@runova/core';
+import type { BlueprintRelaySetting, Project, ProjectBlueprint } from '@runova/core';
 import { blueprintStep, DEFAULT_RELAY_BUDGET, targetAIForProject } from '@runova/core';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
@@ -17,6 +17,7 @@ import {
   TerminalSquare,
 } from '@/components/icons';
 import { BudgetPicker } from '@/components/relay/BudgetPicker';
+import { OverBudgetOptions } from '@/components/relay/OverBudgetOptions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -53,7 +54,7 @@ export function BlueprintReviewStep({
   onDocsFolderChange: (folder: string) => void;
   onConfirmBeforeWritingChange: (value: boolean) => void;
   /** Relay (E26): write the backlog as task files sized to this context budget. */
-  onRelayChange: (value: { enabled: boolean; budgetTokens: number }) => void;
+  onRelayChange: (value: BlueprintRelaySetting) => void;
   onOpenHistory: () => void;
   savingPrompt: boolean;
 }): React.JSX.Element {
@@ -95,6 +96,17 @@ export function BlueprintReviewStep({
         toast.error('Could not write the Relay guide into the project.', {
           description: 'The agent will not find the task format. Check the docs folder.',
         });
+      }
+      // The tasks the agent writes run with the project's relay settings, so they carry these.
+      try {
+        await window.runova.relay.saveSettings(project.id, {
+          options: {
+            keepRolling: relay.keepRolling ?? false,
+            runPastBudget: relay.runPastBudget ?? false,
+          },
+        });
+      } catch {
+        toast.error('Could not save the relay options for this project.');
       }
     }
     setRunMounted(true);
@@ -201,6 +213,15 @@ export function BlueprintReviewStep({
                 onChange={(budgetTokens) => onRelayChange({ ...relay, budgetTokens })}
               />
             </div>
+          ) : null}
+          {relay.enabled ? (
+            <OverBudgetOptions
+              value={{
+                keepRolling: relay.keepRolling ?? false,
+                runPastBudget: relay.runPastBudget ?? false,
+              }}
+              onChange={(next) => onRelayChange({ ...relay, ...next })}
+            />
           ) : null}
         </div>
       </div>

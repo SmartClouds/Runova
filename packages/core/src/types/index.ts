@@ -1342,6 +1342,10 @@ export interface BlueprintRelaySetting {
   enabled: boolean;
   /** Context tokens one session may use on a task. */
   budgetTokens: number;
+  /** A task bigger than the budget is not split to fit: it rolls on to fresh sessions (E120). */
+  keepRolling?: boolean;
+  /** Sessions are never told to hand off for their context (E120). */
+  runPastBudget?: boolean;
 }
 
 /** A reusable snippet defined in Settings and pulled into a step with one click. */

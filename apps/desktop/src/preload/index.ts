@@ -1602,7 +1602,12 @@ const blueprints = {
   /** Relay (E26): write the backlog as task files sized to this context budget. */
   setRelay: (
     projectId: string,
-    value: { enabled: boolean; budgetTokens: number },
+    value: {
+      enabled: boolean;
+      budgetTokens: number;
+      keepRolling?: boolean;
+      runPastBudget?: boolean;
+    },
   ): Promise<ProjectBlueprint> => ipcRenderer.invoke(IPC.blueprints.setRelay, projectId, value),
   /** Null when the picker was cancelled, so the caller can tell that from "nothing changed". */
   pickAttachments: (

@@ -150,6 +150,8 @@ export interface RelayPlannerInput {
   model?: string | null;
   effort?: string | null;
   budget?: number;
+  /** Tasks may be bigger than one session: they roll on to fresh sessions until done. */
+  keepRolling?: boolean;
 }
 
 export interface RelayDecomposeInput extends RelayPlannerInput {

@@ -25,6 +25,8 @@ export interface PlanJob {
   /** What the run was started with, so a reopened dialog shows the same form. */
   text: string;
   budget: number;
+  keepRolling?: boolean;
+  runPastBudget?: boolean;
   recordDone?: boolean;
   status: 'running' | 'done' | 'failed';
   result: PlannedResult | null;
@@ -35,7 +37,14 @@ export interface PlanJob {
 
 export type PlanJobStart = Pick<
   PlanJob,
-  'kind' | 'projectId' | 'projectName' | 'text' | 'budget' | 'recordDone'
+  | 'kind'
+  | 'projectId'
+  | 'projectName'
+  | 'text'
+  | 'budget'
+  | 'keepRolling'
+  | 'runPastBudget'
+  | 'recordDone'
 >;
 
 interface RelayPlanJobsState {

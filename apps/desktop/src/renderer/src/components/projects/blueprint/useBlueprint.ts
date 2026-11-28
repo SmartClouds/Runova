@@ -1,4 +1,10 @@
-import type { BlueprintAttachment, BlueprintStepId, Project, ProjectBlueprint } from '@runova/core';
+import type {
+  BlueprintAttachment,
+  BlueprintRelaySetting,
+  BlueprintStepId,
+  Project,
+  ProjectBlueprint,
+} from '@runova/core';
 import {
   AGENT_TYPE_LABELS,
   blueprintTextHash,
@@ -112,7 +118,7 @@ export function useProjectBlueprint(project: Project) {
   });
 
   const setRelay = useMutation({
-    mutationFn: (value: { enabled: boolean; budgetTokens: number }) =>
+    mutationFn: (value: BlueprintRelaySetting) =>
       window.runova.blueprints.setRelay(projectId, value),
     onSuccess: cache,
     meta: QUIET,

@@ -165,15 +165,64 @@ describe('SplitIntoTasksDialog', () => {
     await waitFor(() => expect(fake.$fn('relay.start')).toHaveBeenCalled());
     expect(fake.$fn('relay.applyProposal')).toHaveBeenCalledWith('p1', {
       ...PROPOSAL,
-      add: [PROPOSAL.add[0]],
+      add: [{ ...PROPOSAL.add[0], budget: 200_000 }],
     });
     expect(fake.$fn('relay.start')).toHaveBeenCalledWith({
       projectId: 'p1',
       only: ['T014', 'T015'],
       trigger: { kind: 'now' },
-      options: { planFirst: true },
+      options: { planFirst: true, keepRolling: false, runPastBudget: false },
     });
     expect(await screen.findByText(/Added T014 and T015/)).toBeInTheDocument();
+  });
+
+  it('keeps big tasks rolling when asked, and saves that for the project', async () => {
+    const saved = {
+      ...board,
+      settings: { options: { keepRolling: false, runPastBudget: false } },
+    };
+    const { user, bridge: fake } = open(
+      {},
+      { 'relay.board': async () => saved, 'relay.saveSettings': async () => saved.settings },
+    );
+    const keepRolling = await screen.findByRole('checkbox', { name: /Keep handing off/ });
+    const runPast = screen.getByRole('checkbox', { name: /Run past the budget/ });
+    expect(keepRolling).not.toBeChecked();
+    await user.click(keepRolling);
+    await user.click(runPast);
+    await plan(user);
+    expect(fake.$fn('relay.decompose')).toHaveBeenCalledWith(
+      expect.objectContaining({ keepRolling: true }),
+    );
+
+    await user.click(screen.getByRole('radio', { name: /Run now/ }));
+    await user.click(screen.getByRole('button', { name: 'Add 2 tasks to board' }));
+
+    await waitFor(() => expect(fake.$fn('relay.start')).toHaveBeenCalled());
+    expect(fake.$fn('relay.saveSettings')).toHaveBeenCalledWith('p1', {
+      options: { keepRolling: true, runPastBudget: true },
+    });
+    expect(fake.$fn('relay.start')).toHaveBeenCalledWith(
+      expect.objectContaining({
+        options: { planFirst: false, keepRolling: true, runPastBudget: true },
+      }),
+    );
+  });
+
+  it('starts with the over-budget choices the project saved', async () => {
+    open(
+      {},
+      {
+        'relay.board': async () => ({
+          ...board,
+          settings: { options: { keepRolling: true, runPastBudget: false } },
+        }),
+      },
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('checkbox', { name: /Keep handing off/ })).toBeChecked(),
+    );
+    expect(screen.getByRole('checkbox', { name: /Run past the budget/ })).not.toBeChecked();
   });
 
   it('only adds the tasks when the user chose to', async () => {
@@ -202,7 +251,7 @@ describe('SplitIntoTasksDialog', () => {
     expect(fake.$fn('relay.start')).toHaveBeenCalledWith(
       expect.objectContaining({
         trigger: { kind: 'after-task', projectId: 'p1', taskId: 'T003' },
-        options: { planFirst: false },
+        options: { planFirst: false, keepRolling: false, runPastBudget: false },
       }),
     );
   });

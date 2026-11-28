@@ -71,6 +71,7 @@ const plannerFields = {
   model: z.string().max(200).nullish(),
   effort: z.string().max(40).nullish(),
   budget: z.number().int().min(10_000).max(10_000_000).optional(),
+  keepRolling: z.boolean().optional(),
 };
 const decomposeSchema = z.object({ ...plannerFields, request: z.string().min(1).max(100_000) });
 const reviseSchema = z.object({ ...plannerFields, note: z.string().max(20_000).optional() });
@@ -140,6 +141,7 @@ async function prepareRun(projectId: string, task: string): Promise<RelaySingleR
       commitPerTask: settings.options.commitPerTask,
       mcp: false,
       planFirst,
+      runPastBudget: settings.options.runPastBudget,
     }),
     choice,
     planFirst,

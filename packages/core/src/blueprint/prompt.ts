@@ -24,7 +24,7 @@ export interface BlueprintPromptInput {
   /** Ask the agent to list its intended phases and epics before writing anything. */
   confirmBeforeWriting: boolean;
   /** Write the backlog as Relay task files sized to this context budget, instead of BACKLOG.md. */
-  relay?: { enabled: boolean; budgetTokens: number };
+  relay?: { enabled: boolean; budgetTokens: number; keepRolling?: boolean };
 }
 
 function relayOn(input: BlueprintPromptInput): boolean {
@@ -85,7 +85,9 @@ ${backlogArtifact(input)}
 
 function rules(input: BlueprintPromptInput): string {
   const sizing = relayOn(input)
-    ? '- Size tasks by the context budget under "Relay tasks", so each fits one AI session.'
+    ? input.relay?.keepRolling
+      ? '- Size tasks by the context budget under "Relay tasks"; a task may run over several AI sessions, but each one ends with something testable.'
+      : '- Size tasks by the context budget under "Relay tasks", so each fits one AI session.'
     : `- Size tasks so each one is a single focused change. Split anything that would take more than
   about a day.`;
   const links = relayOn(input) ? 'its task files' : 'its backlog tasks';
@@ -104,7 +106,7 @@ function relaySection(input: BlueprintPromptInput): string {
 
 # Relay tasks
 
-${blueprintRelaySection(input.docsFolder, input.relay.budgetTokens)}`;
+${blueprintRelaySection(input.docsFolder, input.relay.budgetTokens, input.relay.keepRolling)}`;
 }
 
 /**
@@ -174,7 +176,7 @@ The prompt you write must instruct the assistant to:
 - keep the technology choices exactly as the blueprint states them;
 - cross-link the artifacts so the roadmap, the epics, and the backlog reference each other;${
     relayOn(input) && input.relay
-      ? `\n- write the backlog as Relay task files in \`${tasksFolderRelPath(docsFolder)}/\` rather than one backlog file, each task sized to finish in one AI session with a ${formatTokenCount(input.relay.budgetTokens)}-token context budget, exactly as the "Relay tasks" text below describes (include that text in the prompt);`
+      ? `\n- write the backlog as Relay task files in \`${tasksFolderRelPath(docsFolder)}/\` rather than one backlog file, ${input.relay.keepRolling ? `each task sized against a ${formatTokenCount(input.relay.budgetTokens)}-token context budget per session (a task may take several sessions)` : `each task sized to finish in one AI session with a ${formatTokenCount(input.relay.budgetTokens)}-token context budget`}, exactly as the "Relay tasks" text below describes (include that text in the prompt);`
       : ''
   }${
     confirmBeforeWriting

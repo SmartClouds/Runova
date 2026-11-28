@@ -81,6 +81,11 @@ export async function handleRelayMcp(
       });
     }
     case 'context_status': {
+      if (relay.options.runPastBudget) {
+        return ok(
+          'This relay runs past the context budget: there is no limit to hand off at. Write the handoff when the task is done, blocked, or when you stop.',
+        );
+      }
       if (leg.contextTokens === null) {
         return ok(
           `Runova cannot measure this session's context. The budget is ${formatTokenCount(leg.budget)} tokens; hand off with outcome: continue if you think you are near it.`,

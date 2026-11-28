@@ -30,6 +30,17 @@ describe('buildBlueprintPrompt', () => {
     expect(prompt).toContain('docs/tasks/');
     expect(prompt).toContain('docs/tasks/RELAY.md');
     expect(prompt).toContain('200K');
+    expect(prompt).toMatch(/so each fits one AI session/);
+  });
+
+  it('lets a task run over several sessions when the relay keeps rolling', () => {
+    const prompt = buildBlueprintPrompt(
+      input({ relay: { enabled: true, budgetTokens: 200_000, keepRolling: true } }),
+    );
+    expect(prompt).not.toMatch(/so each fits one AI session/);
+    expect(prompt).toMatch(/may run over several AI sessions/);
+    expect(prompt).toMatch(/carries on in a new session/);
+    expect(prompt).not.toContain('—');
   });
 });
 
@@ -41,6 +52,15 @@ describe('buildBlueprintGenerationRequest', () => {
     expect(request).not.toContain('BACKLOG.md');
     expect(request).toContain('docs/tasks/');
     expect(request).toContain('400K');
+    expect(request).toMatch(/sized to finish in one AI session/);
+  });
+
+  it('says a task may take several sessions when the relay keeps rolling', () => {
+    const request = buildBlueprintGenerationRequest(
+      input({ relay: { enabled: true, budgetTokens: 400_000, keepRolling: true } }),
+    );
+    expect(request).toMatch(/a task may take several sessions/);
+    expect(request).not.toMatch(/sized to finish in one AI session/);
   });
 
   it('keeps the backlog when the relay is off', () => {
