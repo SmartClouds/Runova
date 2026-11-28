@@ -209,6 +209,41 @@ describe('SplitIntoTasksDialog', () => {
     );
   });
 
+  it('plans parts with no budget in plan mode and writes the plan with them', async () => {
+    const planned = {
+      ...PLANNED,
+      proposal: {
+        ...PROPOSAL,
+        plan: { title: 'Search' },
+        milestones: [{ title: 'First cut' }, { title: 'Polish' }],
+        questions: [{ title: 'Fuzzy?' }],
+      },
+    };
+    const { user, bridge: fake } = open({}, { 'relay.decompose': async () => planned });
+    await user.click(screen.getByRole('radio', { name: 'Plan only' }));
+    expect(screen.queryByRole('radiogroup', { name: 'Session budget' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: /Keep handing off/ })).not.toBeInTheDocument();
+    await plan(user);
+    expect(fake.$fn('relay.decompose')).toHaveBeenCalledWith(
+      expect.objectContaining({ mode: 'plan' }),
+    );
+    expect(
+      screen.getByText('Also writes the plan, 2 milestones and 1 question.'),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole('radio', { name: /Run now/ }));
+    await user.click(screen.getByRole('button', { name: 'Add 2 tasks to board' }));
+    await waitFor(() => expect(fake.$fn('relay.start')).toHaveBeenCalled());
+    expect(fake.$fn('relay.applyProposal')).toHaveBeenCalledWith('p1', planned.proposal, {
+      mode: 'plan',
+    });
+    expect(fake.$fn('relay.start')).toHaveBeenCalledWith(
+      expect.objectContaining({
+        options: { planFirst: false, keepRolling: true, runPastBudget: true },
+      }),
+    );
+  });
+
   it('starts with the over-budget choices the project saved', async () => {
     open(
       {},

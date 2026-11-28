@@ -3,7 +3,7 @@ title: Relay tasks
 category: Build
 order: 15
 summary: Break work into tasks that each fit one AI session, run them one after another in fresh sessions, and carry what each session learned to the next through a handoff file.
-keywords: relay, tasks, task board, board, handoff, baton, context, context budget, 200k, session, split into tasks, split into relay tasks, revise with ai, plan first, auto mode, run relay, schedule, after a task, sdd, kanban, trello, mcp, runova_relay, finish_leg, over budget, keep handing off, run past the budget, session limit
+keywords: relay, tasks, task board, board, handoff, baton, context, context budget, 200k, session, split into tasks, split into relay tasks, revise with ai, plan first, auto mode, run relay, schedule, after a task, sdd, kanban, trello, mcp, runova_relay, finish_leg, over budget, keep handing off, run past the budget, session limit, plan mode, plan only, plan.md, milestones, decisions, workarounds, risks, questions, journal, redo, another agent, attempt, review each task
 route: /workspace
 ---
 
@@ -43,11 +43,11 @@ While a relay runs, the status bar shows which task is running and how full its 
 
 **Open the board** (or **Task board** on the project page) shows every task on a glass board with five columns: To do, In progress, Testing, Done and Blocked. Cards move by themselves as the relay works. You can also drag a card to another column or order, or use Alt+arrow keys.
 
-Click a card to see its spec, the baton (the five handoff sections across every session) and its session history: agent, model, how long it ran, how much context it used, and how it ended.
+Click a card to see its spec, the baton (the handoff sections across every session) and its session history: agent, model, how long it ran, how much context it used, and how it ended.
 
 ## How a task finishes
 
-Every session updates `docs/tasks/handoffs/T001.md` (for task T001) with five sections: Purpose, Done so far, Decisions, Tried and rejected, and Next step. At the top it says the outcome:
+Every session updates `docs/tasks/handoffs/T001.md` (for task T001) with these sections: Purpose, Done so far, Decisions, Tests run (the commands it ran and what they reported), Workarounds, Tried and rejected, Open questions, and Next step. At the top it says the outcome:
 
 - **done**: the task moves to Done and the next task starts. If its tests failed, it goes to Testing and the relay pauses.
 - **continue**: the session ran out of budget. A fresh session starts on the same task and carries on from the Next step.
@@ -65,6 +65,28 @@ By default a task is split until it fits the budget, and a task that takes six s
 You can turn on either one or both. In every mode the relay still pauses when two sessions in a row leave the same handoff, so a task that is stuck never runs forever.
 
 Runova keeps each task's status in its file. Agents only write handoffs. With **Commit when done** on (the default), each finished task is committed on its own, with only the files it changed.
+
+## Plan mode
+
+Sometimes the question is not how much fits in one session, but how to break a big job into parts you can build one at a time. In **Split into tasks**, or on the Blueprint review step, choose **Plan only** instead of **Fit the context budget**.
+
+The planner then splits the job by what each part delivers, with no context budget at all. Each part gets a full spec: goal, context, approach, the files and interfaces it touches, what is in and out of scope, acceptance criteria, a test plan and its risks, plus a priority and a size. The planner also writes the plan itself (`docs/tasks/PLAN.md`), groups the parts into milestones, and lists the risks and the questions only you can answer. You review it all before anything is written.
+
+A part runs like any task, now or later, with any agent, and never stops for its context. Turn on **Review each task** in Run settings to pause after every finished part, so you can look at it before the next one starts.
+
+## What the plan keeps
+
+Everything lives in `docs/tasks/` as Markdown, so git keeps its history and anyone who clones the repo has it:
+
+- `PLAN.md`: the goal, the mode, the definition of done and what is out of scope. When it turns on Keep handing off, Run past the budget or Review each task, they are on for everyone who runs the plan.
+- `milestones/`, `decisions/`, `workarounds/`, `risks/` and `questions/`: one file per record (M001, D001, W001, R001, Q001). Sessions write a decision when later parts rely on it, and a workaround whenever they work around a bug or a missing feature, with the package and version it waits for, so you can remove it when the fix comes out.
+- `journal/T001.md`: Runova adds an entry each time a session on the task ends: the agent and model, the outcome, the tests, the context it used, how long it took and its commit.
+
+Each session reads the plan and the decisions and workarounds that touch its task before it starts.
+
+## Redo with another agent
+
+Open a task and click **Redo** to run it again from its spec, with another agent if you like. Its handoff and journal so far move to `docs/tasks/handoffs/archive/T001-attempt-1.md`, nothing is lost, and the task goes back to To do as attempt 2. With **Learn from the earlier attempt** on, the new session reads that archive first; turn it off for a clean second opinion.
 
 ## Plan first
 

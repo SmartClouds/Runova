@@ -112,7 +112,8 @@ type RelayApi = {
   relay: {
     start(input: unknown): Promise<{ ok: boolean; error?: string; run?: { id: string } }>;
     runs(projectId: string): Promise<{ id: string; status: string; pauseReason: string | null }[]>;
-    applyProposal(projectId: string, proposal: unknown): Promise<unknown>;
+    applyProposal(projectId: string, proposal: unknown, options?: unknown): Promise<unknown>;
+    redo(input: unknown): Promise<{ redone: string[]; started: boolean; error?: string }>;
     decompose(input: unknown): Promise<{ ok: boolean; error?: string; proposal?: unknown }>;
   };
 };
@@ -422,4 +423,89 @@ test('picks up a project in progress, then carries on from the half-done task', 
   expect(launches[0]).toContain('task T002');
   expect(launches[0]).toContain('already records work');
   expect(launches[1]).toContain('task T003');
+});
+
+test('plans parts with no budget, journals each session, and redoes a part with what it learned', async () => {
+  test.setTimeout(240_000);
+  launched = await launchRelayApp();
+  const { page, projectDir } = launched;
+  write(
+    projectDir,
+    '.fake-relay.json',
+    JSON.stringify({
+      proposal: {
+        summary: 'One part in one milestone.',
+        plan: { title: 'Patient search', goal: 'Find a patient fast.' },
+        milestones: [{ id: 'M001', title: 'First cut' }],
+        questions: [{ title: 'Fuzzy or exact?' }],
+        add: [
+          {
+            id: 'T001',
+            title: 'Search index',
+            milestone: 'M001',
+            context: 'Ten thousand patients.',
+            acceptance: ['Finds by name'],
+          },
+        ],
+      },
+    }),
+  );
+  const projectId = await openWorkspace(launched);
+  const planned = await page.evaluate(
+    (id) =>
+      (window as unknown as { runova: RelayApi }).runova.relay.decompose({
+        requestId: 'e2e-plan',
+        projectId: id,
+        request: 'Patient search',
+        mode: 'plan',
+      }),
+    projectId,
+  );
+  expect(planned.ok, planned.error).toBe(true);
+  await page.evaluate(
+    ({ id, proposal }) =>
+      (window as unknown as { runova: RelayApi }).runova.relay.applyProposal(id, proposal, {
+        mode: 'plan',
+      }),
+    { id: projectId, proposal: planned.proposal },
+  );
+  const tasks = join(projectDir, 'docs', 'tasks');
+  expect(readFileSync(join(tasks, 'PLAN.md'), 'utf-8')).toContain('mode: plan');
+  expect(existsSync(join(tasks, 'milestones', 'M001-first-cut.md'))).toBe(true);
+  expect(existsSync(join(tasks, 'questions', 'Q001-fuzzy-or-exact.md'))).toBe(true);
+
+  await startRelay(page, { projectId, trigger: { kind: 'now' } });
+  await expect.poll(() => statusOf(projectDir, 'T001'), { timeout: 90_000 }).toBe('done');
+  const first = launched.claudeLaunches().filter((line) => line.includes('Runova Relay'));
+  expect(first).toHaveLength(1);
+  // Plan mode has no budget, and the session reads the plan first.
+  expect(first[0]).toMatch(/no context limit/);
+  expect(first[0]).toContain('docs/tasks/PLAN.md');
+  await expect
+    .poll(() => existsSync(join(tasks, 'journal', 'T001.md')), { timeout: 30_000 })
+    .toBe(true);
+  expect(readFileSync(join(tasks, 'journal', 'T001.md'), 'utf-8')).toMatch(/session 1/);
+  await expect.poll(async () => (await runsOf(page, projectId))[0]?.status).toBe('done');
+
+  const redo = await page.evaluate(
+    (id) =>
+      (window as unknown as { runova: RelayApi }).runova.relay.redo({
+        projectId: id,
+        taskIds: ['T001'],
+        agent: null,
+        keepLearnings: true,
+        start: true,
+      }),
+    projectId,
+  );
+  expect(redo, redo.error).toMatchObject({ redone: ['T001'], started: true });
+  expect(existsSync(join(tasks, 'handoffs', 'archive', 'T001-attempt-1.md'))).toBe(true);
+  await expect
+    .poll(() => launched?.claudeLaunches().filter((line) => line.includes('Runova Relay')).length)
+    .toBe(2);
+  const second = launched.claudeLaunches().filter((line) => line.includes('Runova Relay'))[1];
+  expect(second).toContain('docs/tasks/handoffs/archive/T001-attempt-1.md');
+  await expect.poll(() => statusOf(projectDir, 'T001'), { timeout: 90_000 }).toBe('done');
+  const task = readdirSync(tasks).find((name) => name.startsWith('T001-')) ?? '';
+  expect(readFileSync(join(tasks, task), 'utf-8')).toContain('attempt: 2');
 });

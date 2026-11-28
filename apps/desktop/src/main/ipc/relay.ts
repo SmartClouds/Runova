@@ -13,14 +13,17 @@ import type {
   RelayMcpProposal,
   RelayPlannerResult,
   RelayProjectSettings,
+  RelayRedoResult,
   RelayRunView,
   RelaySingleRun,
   RelayStartResult,
   RelayTaskDetail,
 } from '../../shared/relayTypes';
 import { buildRelayBoard, projectRelayFolder, relayTaskDetail } from '../relay/board';
+import { legPointers } from '../relay/planFiles';
 import { cancelPlanner, catchUpBoard, decomposeRequest, reviseBoard } from '../relay/planner';
 import { announcePlannerResult, type PlannerKind } from '../relay/plannerNotice';
+import { redoTasks } from '../relay/redo';
 import { getRelayRuntime } from '../relay/runtime';
 import { legRecords, saveRelaySettings, settingsPatchSchema } from '../relay/store';
 import {
@@ -73,7 +76,22 @@ const plannerFields = {
   budget: z.number().int().min(10_000).max(10_000_000).optional(),
   keepRolling: z.boolean().optional(),
 };
-const decomposeSchema = z.object({ ...plannerFields, request: z.string().min(1).max(100_000) });
+const planMode = z.enum(['fit', 'plan']);
+const decomposeSchema = z.object({
+  ...plannerFields,
+  request: z.string().min(1).max(100_000),
+  mode: planMode.optional(),
+});
+const applyOptionsSchema = z.object({ mode: planMode.optional() }).strict().optional();
+const redoSchema = z
+  .object({
+    projectId: id,
+    taskIds: z.union([z.literal('all'), z.array(taskId).min(1).max(500)]),
+    agent: z.string().min(1).max(64).nullable(),
+    keepLearnings: z.boolean(),
+    start: z.boolean(),
+  })
+  .strict();
 const reviseSchema = z.object({ ...plannerFields, note: z.string().max(20_000).optional() });
 const catchUpSchema = z.object({
   ...plannerFields,
@@ -130,8 +148,10 @@ async function prepareRun(projectId: string, task: string): Promise<RelaySingleR
   const planFirst =
     (wantsPlan ?? settings.options.planFirst) && relayCapabilities(choice.cliId).planMode;
   const legNo = (await legRecords(projectId, task)).length + 1;
+  const pointers = await legPointers(folder, file.task);
   return {
     prompt: buildLegPrompt({
+      ...pointers,
       task: { id: task, title: file.task.title, file: file.file },
       docsFolder: folder.docsFolder,
       legNo,
@@ -216,6 +236,21 @@ export function registerRelayHandlers(): void {
     (_event, input: unknown): Promise<RelayStartResult> =>
       runtime().start(startSchema.parse(input)),
   );
+  ipcMain.handle(IPC.relay.redo, async (_event, input: unknown): Promise<RelayRedoResult> => {
+    const redo = redoSchema.parse(input);
+    const { folder } = await projectRelayFolder(redo.projectId);
+    const { redone, warnings } = await redoTasks(folder, redo);
+    changed(redo.projectId, 'files');
+    if (!redo.start || redone.length === 0) return { redone, warnings, started: false };
+    const outcome = await runtime().start({
+      projectId: redo.projectId,
+      only: redone,
+      trigger: { kind: 'now' },
+    });
+    return outcome.ok
+      ? { redone, warnings, started: true }
+      : { redone, warnings, started: false, error: outcome.error };
+  });
   ipcMain.handle(IPC.relay.pause, (_event, relayId: unknown) => runtime().pause(id.parse(relayId)));
   ipcMain.handle(IPC.relay.resume, (_event, relayId: unknown) =>
     runtime().resume(id.parse(relayId)),
@@ -260,12 +295,18 @@ export function registerRelayHandlers(): void {
 
   ipcMain.handle(
     IPC.relay.applyProposal,
-    async (_event, projectId: unknown, proposal: unknown): Promise<RelayApplyResult> => {
+    async (
+      _event,
+      projectId: unknown,
+      proposal: unknown,
+      options: unknown,
+    ): Promise<RelayApplyResult> => {
       const project = id.parse(projectId);
       const { folder } = await projectRelayFolder(project);
       const result = await applyProposalFiles(
         folder,
         proposalSchema.parse(proposal) as unknown as RelayProposal,
+        applyOptionsSchema.parse(options) ?? {},
       );
       changed(project, 'files');
       return result;

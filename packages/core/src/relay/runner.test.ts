@@ -541,6 +541,28 @@ describe('outcomes', () => {
     );
   });
 
+  it('pauses after each finished task when asked to, and goes on when resumed', () => {
+    const tasks = [snapshot('T001'), snapshot('T002')];
+    const { state } = running(relay({ tasks, relayOptions: { reviewEachTask: true } }));
+    const done = finish(state, handoff({ outcome: 'done', tests: 'passed' }));
+    expect(done.state.status).toBe('paused');
+    expect(done.state.pauseReason).toMatch(/T001 is done/);
+    expect(done.state.current).toBeNull();
+    expect(of(done.effects, 'launch')).toEqual([]);
+    expect(of(done.effects, 'notify')).toEqual([
+      expect.objectContaining({ level: 'info', title: 'T001 is done' }),
+    ]);
+    const resumed = feed(done.state, { type: 'resume', now: T0 + 30_000 });
+    expect(of(resumed.effects, 'launch')[0]).toMatchObject({ taskId: 'T002' });
+  });
+
+  it('does not pause after the last task when reviewing each one', () => {
+    const tasks = [snapshot('T001')];
+    const { state } = running(relay({ tasks, relayOptions: { reviewEachTask: true } }));
+    const done = finish(state, handoff({ outcome: 'done', tests: 'passed' }));
+    expect(done.state.status).toBe('done');
+  });
+
   it('finishes the relay after the last task', () => {
     const { state } = running(relay({ tasks: [snapshot('T001')] }));
     const next = finish(state, handoff());

@@ -30,6 +30,7 @@ import { store } from '../store';
 import { findProjectScope } from '../worktrees/resolve';
 import { deliverWhenReady } from './delivery';
 import { relayMcpLaunchArgs } from './mcp/config';
+import { legPointers } from './planFiles';
 import {
   ensureGuide,
   ensureHandoffTemplate,
@@ -137,7 +138,9 @@ export async function launchRelayLeg(request: LegLaunchRequest): Promise<LegLaun
     relayMcpLaunchArgs(choice.cliId),
     store.getSettings(),
   ]);
+  const pointers = await legPointers(folder, task.task);
   const prompt = buildLegPrompt({
+    ...pointers,
     task: { id: taskId, title: task.task.title, file: task.file },
     docsFolder: folder.docsFolder,
     legNo: request.legNo,

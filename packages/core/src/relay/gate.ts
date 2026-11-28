@@ -188,7 +188,7 @@ function guardText(leg: GateLegView): string {
 function stopReason(leg: GateLegView): string {
   return (
     `Before you stop, rewrite ${leg.handoffRelPath} as the Relay guide describes: fill in all ` +
-    `five sections and set outcome (done, continue or blocked), tests and leg: ${leg.legNo}. ` +
+    `sections and set outcome (done, continue or blocked), tests and leg: ${leg.legNo}. ` +
     'If you need the user to decide something, set outcome: blocked and put the question under ' +
     'Next step. Then stop.'
   );

@@ -1346,6 +1346,8 @@ export interface BlueprintRelaySetting {
   keepRolling?: boolean;
   /** Sessions are never told to hand off for their context (E120). */
   runPastBudget?: boolean;
+  /** `plan` splits into parts with full specs and no context budget (E121). */
+  mode?: 'fit' | 'plan';
 }
 
 /** A reusable snippet defined in Settings and pulled into a step with one click. */

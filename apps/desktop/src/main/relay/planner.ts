@@ -1,6 +1,7 @@
 import {
   buildCatchUpRequest,
   buildDecomposeRequest,
+  buildPlanRequest,
   buildReviseRequest,
   diffProposal,
   type EffortLevel,
@@ -17,6 +18,7 @@ import type {
 } from '../../shared/relayTypes';
 import { cancelHeadlessPrompt, runHeadlessCliPrompt } from '../cli/headlessPrompt';
 import { findProjectScope } from '../worktrees/resolve';
+import { readItems } from './planFiles';
 import { relaySettings } from './store';
 import { readBoardFiles, relayFolder } from './taskFiles';
 
@@ -92,7 +94,24 @@ function boardTasks(board: Awaited<ReturnType<typeof readBoardFiles>>) {
 
 /** Breaks a request into context-sized tasks that continue the board's numbering. */
 export async function decomposeRequest(input: RelayDecomposeInput): Promise<RelayPlannerResult> {
-  const { project, settings, board } = await context(input.projectId);
+  const { project, settings, folder, board } = await context(input.projectId);
+  const existing = board.files.map((file) => ({
+    id: file.task.id,
+    title: file.task.title,
+    status: file.task.status,
+  }));
+  if (input.mode === 'plan') {
+    const milestones = await readItems(folder, 'milestone');
+    const prompt = buildPlanRequest({
+      projectName: project.name,
+      request: input.request,
+      docsFolder: settings.docsFolder,
+      firstId: nextTaskId(board.files.map((file) => file.task.id)),
+      existing,
+      milestones: milestones.map((milestone) => ({ id: milestone.id, title: milestone.title })),
+    });
+    return plan(input, prompt, board, project.folderPath);
+  }
   const prompt = buildDecomposeRequest({
     projectName: project.name,
     request: input.request,

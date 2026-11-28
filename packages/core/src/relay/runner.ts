@@ -42,6 +42,8 @@ export interface RelayOptions {
   keepRolling: boolean;
   /** No session is told to hand off because of its context; the CLI compacts its own. */
   runPastBudget: boolean;
+  /** Pause after every finished task, so the person looks at it before the next one starts. */
+  reviewEachTask: boolean;
 }
 
 export const DEFAULT_RELAY_OPTIONS: RelayOptions = {
@@ -55,6 +57,7 @@ export const DEFAULT_RELAY_OPTIONS: RelayOptions = {
   defaultBudget: 200_000,
   keepRolling: false,
   runPastBudget: false,
+  reviewEachTask: false,
 };
 
 export const RELAY_TIMING = {
@@ -567,6 +570,17 @@ function completeLeg(step: Step, now: number): void {
     ...step.state,
     finished: [...step.state.finished, { taskId, result: 'done', at: now }],
   };
+  if (step.state.options.reviewEachTask && step.state.queue.length > 0) {
+    notify(step, {
+      level: 'info',
+      title: `${taskId} is done`,
+      body: 'The relay waits for you to look it over. Resume when you are ready for the next task.',
+      taskId,
+    });
+    pause(step, `${taskId} is done. Look it over, then resume.`);
+    step.state = { ...step.state, current: null };
+    return;
+  }
   advance(step, now);
 }
 

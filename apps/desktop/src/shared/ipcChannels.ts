@@ -1220,6 +1220,8 @@ export const IPC = {
     prepareRun: 'relay:prepareRun',
     // (RelayStartInput) -> RelayStartResult
     start: 'relay:start',
+    // (RelayRedoInput) -> RelayRedoResult: run tasks again as a new attempt (E121)
+    redo: 'relay:redo',
     // (relayId) -> void
     pause: 'relay:pause',
     resume: 'relay:resume',

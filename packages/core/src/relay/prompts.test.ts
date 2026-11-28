@@ -4,7 +4,9 @@ import {
   buildCatchUpRequest,
   buildDecomposeRequest,
   buildLegPrompt,
+  buildPlanRequest,
   buildReviseRequest,
+  PLAN_PROPOSAL_SHAPE,
   RELAY_PROPOSAL_SHAPE,
 } from './prompts.js';
 
@@ -221,5 +223,68 @@ describe('blueprintRelaySection', () => {
     expect(section).toMatch(/carries on in a new session/);
     expect(section).toContain('budget: 200000');
     expect(section).not.toContain('—');
+  });
+});
+
+describe('buildPlanRequest', () => {
+  const request = buildPlanRequest({
+    projectName: 'CuraLink',
+    request: 'Move the clinic from paper charts to the app',
+    docsFolder: 'docs',
+    firstId: 'T030',
+    existing: [{ id: 'T001', title: 'Login', status: 'done' }],
+    milestones: [{ id: 'M001', title: 'Pilot' }],
+  });
+
+  it('asks for parts with full specs and no budget', () => {
+    expect(request).toContain('Move the clinic from paper charts to the app');
+    expect(request).toContain('T030');
+    expect(request).toContain('T001 Login (done)');
+    expect(request).toContain('M001 Pilot');
+    expect(request).toMatch(/not by any context or token limit/);
+    expect(request).not.toMatch(/estimate/i);
+    expect(request).not.toMatch(/\d+K/);
+    for (const field of ['context', 'approach', 'interfaces', 'outOfScope', 'risks']) {
+      expect(PLAN_PROPOSAL_SHAPE).toContain(`"${field}"`);
+    }
+    expect(request).toContain(PLAN_PROPOSAL_SHAPE);
+    expect(request).toMatch(/do not guess the answers/);
+    expect(request).not.toContain('—');
+  });
+});
+
+describe('the leg prompt and the plan pack', () => {
+  const base = {
+    task: TASK,
+    docsFolder: 'docs',
+    legNo: 1,
+    continuation: false,
+    budget: 200_000,
+    dependsOn: [],
+    commitPerTask: false,
+    mcp: false,
+    planFirst: false,
+  };
+
+  it('points at the plan, the records and an earlier attempt when there are some', () => {
+    const prompt = buildLegPrompt({
+      ...base,
+      hasPlan: true,
+      hasRecords: true,
+      previousAttempt: 'docs/tasks/handoffs/archive/T003-attempt-1.md',
+    });
+    expect(prompt).toContain('docs/tasks/PLAN.md');
+    expect(prompt).toContain('docs/tasks/decisions/');
+    expect(prompt).toContain('docs/tasks/workarounds/');
+    expect(prompt).toContain('docs/tasks/handoffs/archive/T003-attempt-1.md');
+    expect(prompt).toMatch(/Records you keep/);
+  });
+
+  it('leaves them out for a board without them', () => {
+    const prompt = buildLegPrompt(base);
+    expect(prompt).not.toContain('PLAN.md');
+    expect(prompt).not.toContain('decisions/');
+    expect(prompt).not.toContain('archive');
+    expect(prompt).not.toContain('"');
   });
 });

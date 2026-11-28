@@ -74,6 +74,7 @@ function renderStep(
       budgetTokens: number;
       keepRolling?: boolean;
       runPastBudget?: boolean;
+      mode?: 'fit' | 'plan';
     };
   } = {},
 ) {
@@ -265,6 +266,33 @@ describe('BlueprintReviewStep Relay split', () => {
     await screen.findByRole('dialog', { name: 'Run dialog' });
     expect(bridge.$fn('relay.saveSettings')).toHaveBeenCalledWith('p1', {
       options: { keepRolling: true, runPastBudget: false },
+    });
+  });
+
+  it('plans parts with no budget, and saves that for the run', async () => {
+    const { user, onRelayChange } = renderStep({
+      finalPrompt: 'Plan it',
+      relay: { enabled: true, budgetTokens: 200_000 },
+    });
+    await user.click(screen.getByRole('radio', { name: 'Plan only' }));
+    expect(onRelayChange).toHaveBeenCalledWith({
+      enabled: true,
+      budgetTokens: 200_000,
+      mode: 'plan',
+    });
+  });
+
+  it('hides the budget in plan mode and runs past it', async () => {
+    const { user, bridge } = renderStep({
+      finalPrompt: 'Plan it',
+      relay: { enabled: true, budgetTokens: 200_000, mode: 'plan' },
+    });
+    expect(screen.queryByRole('radiogroup', { name: 'Session budget' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: /Keep handing off/ })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Run in CLI' }));
+    await screen.findByRole('dialog', { name: 'Run dialog' });
+    expect(bridge.$fn('relay.saveSettings')).toHaveBeenCalledWith('p1', {
+      options: { keepRolling: true, runPastBudget: true },
     });
   });
 

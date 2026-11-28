@@ -369,6 +369,13 @@ export function RelayRunSettingsForm({
               onCheckedChange={(runPastBudget) => void save({ options: { runPastBudget } })}
             />
           </Row>
+          <Row label="Review each task" hint="Pause after every finished task until you resume.">
+            <Switch
+              aria-label="Review each task"
+              checked={settings.options.reviewEachTask ?? false}
+              onCheckedChange={(reviewEachTask) => void save({ options: { reviewEachTask } })}
+            />
+          </Row>
           <Row label="Commit when done" hint="One commit per task, only its own files.">
             <Switch
               aria-label="Commit when done"

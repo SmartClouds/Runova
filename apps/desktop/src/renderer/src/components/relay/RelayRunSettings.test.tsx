@@ -51,6 +51,14 @@ describe('RelayRunSettingsForm', () => {
     });
   });
 
+  it('pauses after each task when asked to', async () => {
+    const { user, bridge } = renderForm();
+    await user.click(screen.getByRole('switch', { name: 'Review each task' }));
+    expect(bridge.$fn('relay.saveSettings')).toHaveBeenLastCalledWith('p1', {
+      options: { reviewEachTask: true },
+    });
+  });
+
   it('turns plan first on for every task', async () => {
     const { user, bridge } = renderForm();
     await user.click(screen.getByRole('switch', { name: 'Plan first' }));

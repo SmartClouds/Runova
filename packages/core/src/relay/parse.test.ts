@@ -203,7 +203,91 @@ describe('renderTaskFile', () => {
     const text = renderTaskFile({ id: 'T006', title: 'Small', status: 'todo' });
     expect(text).not.toContain('epic:');
     expect(text).not.toContain('depends:');
+    expect(text).not.toContain('priority:');
     expect(parseTaskFile('T006-small.md', text).issues).toEqual([]);
+  });
+
+  it('writes the planning fields and a plan-mode spec that parse back', () => {
+    const text = renderTaskFile({
+      id: 'T007',
+      title: 'Search API',
+      priority: 'p1',
+      size: 'l',
+      milestone: 'M002',
+      labels: ['api', 'search ui'],
+      agent: 'codex-cli',
+      due: '2026-12-15',
+      goal: 'Search patients by name.',
+      context: 'The clinic has 40K patients.',
+      approach: 'A trigram index in PostgreSQL.',
+      interfaces: 'GET /api/patients?q=',
+      scope: 'The endpoint and its index.',
+      outOfScope: 'The UI.',
+      acceptance: ['Finds by partial name'],
+      testPlan: 'Integration tests.',
+      risks: 'Index size.',
+    });
+    const task = parseTaskFile('T007-search-api.md', text);
+    expect(task).toMatchObject({
+      priority: 'p1',
+      size: 'l',
+      milestone: 'M002',
+      labels: ['api', 'search ui'],
+      agent: 'codex-cli',
+      due: '2026-12-15',
+      attempt: null,
+      issues: [],
+    });
+    const headings = [...task.body.matchAll(/^## (.+)$/gm)].map((match) => match[1]);
+    expect(headings).toEqual([
+      'Goal',
+      'Context',
+      'Approach',
+      'Interfaces and files',
+      'Scope',
+      'Out of scope',
+      'Acceptance criteria',
+      'Test plan',
+      'Risks',
+    ]);
+  });
+});
+
+describe('planning fields', () => {
+  const read = (front: string) => parseTaskFile('T009-x.md', `---\nid: T009\n${front}\n---\n`);
+
+  it('understands priorities and sizes the way people write them', () => {
+    expect(read('priority: High\nsize: Small').priority).toBe('p1');
+    expect(read('priority: 0\nsize: XL')).toMatchObject({ priority: 'p0', size: 'xl' });
+    expect(read('priority: critical').priority).toBe('p0');
+  });
+
+  it('reads labels as a list or a comma separated string, without repeats', () => {
+    expect(read('labels: [ui, api, ui]').labels).toEqual(['ui', 'api']);
+    expect(read('labels: ui, api').labels).toEqual(['ui', 'api']);
+  });
+
+  it('reads the attempt and the dates Runova writes', () => {
+    const task = read(
+      'attempt: 2\nstarted: 2026-11-28T09:00:00Z\nfinished: 2026-11-28T11:00:00Z\ndue: 2026-12-01T00:00:00Z',
+    );
+    expect(task).toMatchObject({
+      attempt: 2,
+      started: '2026-11-28T09:00:00Z',
+      finished: '2026-11-28T11:00:00Z',
+      due: '2026-12-01',
+    });
+  });
+
+  it('turns values it cannot use into issues', () => {
+    const task = read('priority: whenever\nsize: 13\nmilestone: beta\nattempt: zero');
+    expect(task).toMatchObject({ priority: null, size: null, milestone: null, attempt: null });
+    expect(task.issues.map((issue) => issue.field)).toEqual([
+      'priority',
+      'size',
+      'milestone',
+      'attempt',
+    ]);
   });
 });
 
@@ -288,7 +372,54 @@ describe('parseHandoff', () => {
       decisions: 'c',
       rejected: 'd',
       next: 'e',
+      tests: '',
+      workarounds: '',
+      questions: '',
     });
+  });
+
+  it('reads the newer sections by their usual headings', () => {
+    const handoff = parseHandoff(
+      'T003',
+      [
+        '---',
+        'outcome: done',
+        '---',
+        '## Purpose',
+        'a',
+        '## Done so far',
+        'b',
+        '## Decisions',
+        'c',
+        '## Tests run',
+        '- pnpm test: 12 passed',
+        '## Workarounds',
+        '- W002 pins zod to 4.6 until the parser fix ships',
+        '## Tried and rejected',
+        'None.',
+        '## Open questions',
+        '- Q001 which locale is the default?',
+        '## Next step',
+        'e',
+      ].join('\n'),
+    );
+    expect(handoff.missingSections).toEqual([]);
+    expect(handoff.sections).toMatchObject({
+      tests: '- pnpm test: 12 passed',
+      workarounds: '- W002 pins zod to 4.6 until the parser fix ships',
+      rejected: 'None.',
+      questions: '- Q001 which locale is the default?',
+    });
+  });
+
+  it('asks for the newer sections only when their heading is there', () => {
+    const older = parseHandoff('T003', HANDOFF);
+    expect(older.missingSections).toEqual([]);
+    const fromTemplate = parseHandoff(
+      'T003',
+      `${HANDOFF}\n## Tests run\n\n<!-- hint -->\n\n## Workarounds\n\nNone.\n`,
+    );
+    expect(fromTemplate.missingSections).toEqual(['tests']);
   });
 
   it('reads an unknown outcome as null with an issue', () => {

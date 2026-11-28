@@ -49,6 +49,7 @@ const relaySettingSchema = z
     budgetTokens: z.number().int().min(10_000).max(2_000_000),
     keepRolling: z.boolean().optional(),
     runPastBudget: z.boolean().optional(),
+    mode: z.enum(['fit', 'plan']).optional(),
   })
   .strict();
 

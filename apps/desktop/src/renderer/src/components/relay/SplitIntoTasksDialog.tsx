@@ -1,4 +1,10 @@
-import { DEFAULT_RELAY_BUDGET, taskIdFromFileName, withBudget } from '@runova/core';
+import {
+  DEFAULT_RELAY_BUDGET,
+  type RelayProposal,
+  taskIdFromFileName,
+  withBudget,
+} from '@runova/core';
+import type { RelayPlanModeChoice } from '@shared/relayTypes';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -22,6 +28,7 @@ import { useRelayBoardStore } from '@/stores/relayBoardStore';
 import { planJobKey, useRelayPlanJobsStore } from '@/stores/relayPlanJobsStore';
 import { BudgetPicker } from './BudgetPicker';
 import { OverBudgetOptions, type OverBudgetValue } from './OverBudgetOptions';
+import { PlanModePicker } from './PlanModePicker';
 import { PlannerProgress } from './PlannerProgress';
 import { ProposalReview } from './ProposalReview';
 import { RelayPlannerFields, useRelayPlanner } from './RelayPlannerPicker';
@@ -57,6 +64,18 @@ export interface SplitIntoTasksDialogProps {
 
 const NOT_OVER_BUDGET: OverBudgetValue = { keepRolling: false, runPastBudget: false };
 
+/** "Also writes the plan, 2 milestones, 3 risks and 1 question.", or null when there is none. */
+export function planExtras(proposal: RelayProposal): string | null {
+  const parts = [
+    proposal.plan ? 'the plan' : null,
+    proposal.milestones?.length ? plural(proposal.milestones.length, 'milestone') : null,
+    proposal.risks?.length ? plural(proposal.risks.length, 'risk') : null,
+    proposal.questions?.length ? plural(proposal.questions.length, 'question') : null,
+  ].filter((part): part is string => part !== null);
+  if (parts.length === 0) return null;
+  return `Also writes ${joinIds(parts)}.`;
+}
+
 interface Added {
   projectId: string;
   ids: string[];
@@ -82,6 +101,8 @@ export function SplitIntoTasksDialog({
   const [pickedProjectId, setPickedProjectId] = useState(projectId ?? defaultProjectId ?? '');
   const [budget, setBudget] = useState<number>(DEFAULT_RELAY_BUDGET);
   const [overBudget, setOverBudget] = useState<OverBudgetValue>(NOT_OVER_BUDGET);
+  const [mode, setMode] = useState<RelayPlanModeChoice>('fit');
+  const planOnly = mode === 'plan';
   const [start, setStart] = useState<StartChoice>(ADD_ONLY);
   const [planFirst, setPlanFirst] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -120,6 +141,7 @@ export function SplitIntoTasksDialog({
       ? useRelayPlanJobsStore.getState().jobs[planJobKey('split', initial)]
       : undefined;
     setText(job?.text ?? request);
+    setMode(job?.mode ?? 'fit');
     if (job) {
       setBudget(job.budget);
       setOverBudget({
@@ -149,6 +171,7 @@ export function SplitIntoTasksDialog({
         text: text.trim(),
         budget,
         ...overBudget,
+        mode,
       },
       (requestId) =>
         window.runova.relay.decompose({
@@ -157,6 +180,7 @@ export function SplitIntoTasksDialog({
           request: text.trim(),
           budget,
           keepRolling: overBudget.keepRolling,
+          ...(planOnly ? { mode } : {}),
           ...planner.input,
         }),
     );
@@ -171,11 +195,11 @@ export function SplitIntoTasksDialog({
         queryFn: () => window.runova.relay.board(targetId),
       });
       const existing = new Set(before.tasks.map((task) => task.id));
-      const result = await window.runova.relay.applyProposal(
-        targetId,
-        withBudget(proposal, budget),
-      );
+      const result = planOnly
+        ? await window.runova.relay.applyProposal(targetId, proposal, { mode })
+        : await window.runova.relay.applyProposal(targetId, withBudget(proposal, budget));
       if (
+        !planOnly &&
         savedOptions &&
         ((savedOptions.keepRolling ?? false) !== overBudget.keepRolling ||
           (savedOptions.runPastBudget ?? false) !== overBudget.runPastBudget)
@@ -194,7 +218,9 @@ export function SplitIntoTasksDialog({
           projectId: targetId,
           only: ids,
           trigger,
-          options: { planFirst, ...overBudget },
+          options: planOnly
+            ? { planFirst, keepRolling: true, runPastBudget: true }
+            : { planFirst, ...overBudget },
         });
         if (outcome.ok) started = true;
         else
@@ -288,14 +314,24 @@ export function SplitIntoTasksDialog({
                 />
               </div>
 
-              <div className="flex flex-wrap items-end justify-between gap-3">
-                <div className="space-y-1.5">
-                  <p className="text-xs text-muted-foreground">Context per session</p>
-                  <BudgetPicker value={budget} onChange={setBudget} disabled={running} />
-                </div>
-              </div>
+              <PlanModePicker value={mode} onChange={setMode} disabled={running} />
 
-              <OverBudgetOptions value={overBudget} onChange={setOverBudget} disabled={running} />
+              {planOnly ? null : (
+                <>
+                  <div className="flex flex-wrap items-end justify-between gap-3">
+                    <div className="space-y-1.5">
+                      <p className="text-xs text-muted-foreground">Context per session</p>
+                      <BudgetPicker value={budget} onChange={setBudget} disabled={running} />
+                    </div>
+                  </div>
+
+                  <OverBudgetOptions
+                    value={overBudget}
+                    onChange={setOverBudget}
+                    disabled={running}
+                  />
+                </>
+              )}
 
               <RelayPlannerFields planner={planner} disabled={running} />
 
@@ -303,7 +339,11 @@ export function SplitIntoTasksDialog({
                 <PlannerProgress
                   cliName={planner.cliName}
                   elapsed={run.elapsed}
-                  doing="reading the project and sizing tasks"
+                  doing={
+                    planOnly
+                      ? 'reading the project and planning the parts'
+                      : 'reading the project and sizing tasks'
+                  }
                   onCancel={run.cancel}
                 />
               ) : null}
@@ -322,6 +362,9 @@ export function SplitIntoTasksDialog({
                     budget={budget}
                     onChange={run.setProposal}
                   />
+                  {planExtras(proposal) ? (
+                    <p className="text-xs text-muted-foreground">{planExtras(proposal)}</p>
+                  ) : null}
                   <RelayStartChoice
                     projectId={targetId}
                     value={start}

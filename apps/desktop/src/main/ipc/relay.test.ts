@@ -235,6 +235,44 @@ describe('relays', () => {
     expect(live?.reconcile).toHaveBeenCalledWith([{ legId: 'l1', tabId: 't1' }]);
   });
 
+  it('redoes a task as a new attempt with another agent and starts it', async () => {
+    const live = runtime();
+    vi.mocked(live.start).mockResolvedValue({ ok: true, run: {} as never });
+    await load(live);
+    mkdirSync(join(folder, 'docs', 'tasks', 'handoffs'), { recursive: true });
+    writeFileSync(
+      join(folder, 'docs', 'tasks', 'handoffs', 'T001.md'),
+      '---\ntask: T001\noutcome: blocked\n---\n\n## Purpose\n\nSign in.\n',
+    );
+    const result = await invoke(IPC.relay.redo, {
+      projectId: 'p1',
+      taskIds: ['T001'],
+      agent: 'codex-cli',
+      keepLearnings: true,
+      start: true,
+    });
+    expect(result).toEqual({ redone: ['T001'], warnings: [], started: true });
+    expect(live.start).toHaveBeenCalledWith({
+      projectId: 'p1',
+      only: ['T001'],
+      trigger: { kind: 'now' },
+    });
+    const task = taskText('T001-login.md');
+    expect(task).toContain('attempt: 2');
+    expect(task).toContain('learnFrom: 1');
+    expect(task).toContain('agent: codex-cli');
+    expect(taskText(join('handoffs', 'archive', 'T001-attempt-1.md'))).toContain('Sign in.');
+    await expect(
+      invoke(IPC.relay.redo, {
+        projectId: 'p1',
+        taskIds: ['../T001'],
+        agent: null,
+        keepLearnings: false,
+        start: false,
+      }),
+    ).rejects.toThrow();
+  });
+
   it('says Relay is starting before the runtime is up', async () => {
     await load(null);
     await expect(invoke(IPC.relay.pause, 'r1')).rejects.toThrow(/starting/);
@@ -268,6 +306,46 @@ describe('planning', () => {
     );
     expect(applied.written).toEqual(['T003-export.md']);
     expect(taskText('T003-export.md')).toContain('depends: [T002]');
+  });
+
+  it('plans parts in plan mode and writes the plan, its records and its parts', async () => {
+    await load();
+    cli.run.mockResolvedValue({
+      ok: true,
+      text: JSON.stringify({
+        summary: 'One part.',
+        plan: { title: 'Search everywhere', goal: 'Find anything.' },
+        milestones: [{ id: 'M001', title: 'First cut' }],
+        questions: [{ title: 'Fuzzy or exact?' }],
+        add: [{ title: 'Index', milestone: 'M001', context: 'Ten tables.' }],
+      }),
+      cliName: 'Claude Code',
+    });
+    const planned = await invoke<RelayPlannerResult>(IPC.relay.decompose, {
+      requestId: 'q5',
+      projectId: 'p1',
+      request: 'Search everywhere',
+      mode: 'plan',
+    });
+    expect(cli.run.mock.calls[0][0]).toMatch(/not by any context or token limit/);
+    if (!planned.ok) throw new Error('planned');
+    const applied = await invoke<{ written: string[]; items: string[]; plan: boolean }>(
+      IPC.relay.applyProposal,
+      'p1',
+      planned.proposal,
+      { mode: 'plan' },
+    );
+    expect(applied).toMatchObject({
+      written: ['T003-index.md'],
+      items: ['M001-first-cut.md', 'Q001-fuzzy-or-exact.md'],
+      plan: true,
+    });
+    expect(taskText('PLAN.md')).toContain('mode: plan');
+    expect(taskText('T003-index.md')).toContain('milestone: M001');
+    expect(taskText(join('milestones', 'M001-first-cut.md'))).toContain('title: First cut');
+    await expect(
+      invoke(IPC.relay.applyProposal, 'p1', planned.proposal, { mode: 'later' }),
+    ).rejects.toThrow();
   });
 
   it('tells a user who has moved to another app that the plan is ready', async () => {

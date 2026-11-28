@@ -58,6 +58,7 @@ const optionsSchema = z.object({
   // Optional so settings saved before these existed still read; relaySettings fills them in.
   keepRolling: z.boolean().optional(),
   runPastBudget: z.boolean().optional(),
+  reviewEachTask: z.boolean().optional(),
 });
 
 const overrideSchema = z.object({

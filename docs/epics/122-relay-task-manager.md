@@ -36,7 +36,8 @@ and the Tasks tab keeps them up to date.
 - [ ] T2 Overview, Board and List.
 - [ ] T3 Roadmap and the item views with edit.
 - [ ] T4 Workaround revisit check and Fix with AI.
-- [ ] T5 Blueprint writes the plan pack.
+- [ ] T5 Blueprint writes the plan pack. (The prompt side came with E121: with Relay on it asks
+      for PLAN.md, milestones, risks and questions. Left: open the Tasks tab from the banner.)
 - [ ] T6 Help articles, website feature pages, e2e.
 
 ## Acceptance criteria

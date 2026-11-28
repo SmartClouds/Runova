@@ -57,13 +57,13 @@ tasks/
 
 ## Tasks
 
-- [ ] T1 Core: types, parse and render for PLAN.md, milestones, decisions, workarounds, risks,
+- [x] T1 Core: types, parse and render for PLAN.md, milestones, decisions, workarounds, risks,
       questions and the journal; new task fields; new handoff sections.
-- [ ] T2 Core: the guide, the plan-mode planner request, proposal milestones, risks and questions,
+- [x] T2 Core: the guide, the plan-mode planner request, proposal milestones, risks and questions,
       the leg prompt's pointers, `reviewEachTask`.
-- [ ] T3 Desktop: reading the new files on the board, the journal writer, redo, the planner's mode.
-- [ ] T4 Split dialog and Blueprint: the mode choice.
-- [ ] T5 Help and e2e.
+- [x] T3 Desktop: reading the new files on the board, the journal writer, redo, the planner's mode.
+- [x] T4 Split dialog and Blueprint: the mode choice.
+- [x] T5 Help and e2e.
 
 ## Acceptance criteria
 
@@ -79,3 +79,45 @@ tasks/
   runner.
 - Desktop: board reading, journal, redo, planner, dialog.
 - e2e: a plan-mode split and run, and a redo.
+
+## Implementation notes
+
+- **Core.** `relay/plan.ts` reads and writes PLAN.md, the five kinds of record (one spec per kind in
+  `RELAY_ITEM_SPECS`: prefix, folder, statuses, sections), the journal and the attempt archive, all
+  through the same lenient front matter reader as tasks. `planRunOptions` turns a plan into run
+  options; a plan only turns options on, never off, so a choice made on one computer is never undone
+  by the repo. Tasks gained `priority`, `size`, `milestone`, `labels`, `agent`, `due`, `attempt`,
+  `learnFrom`, `started` and `finished`, and plan-mode bodies (Context, Approach, Interfaces and
+  files, Out of scope, Risks).
+- **Handoffs.** `HANDOFF_SECTIONS` has Tests run, Workarounds and Open questions, marked
+  `sinceTemplate`: they count as missing only when their heading is there, so a handoff written
+  before them stays complete, and the task detail hides them on such a handoff.
+- **Guide.** `relay/guide.ts` carries a version marker. `ensureGuide` replaces a guide Runova wrote
+  (version 1 is recognised by its closing line) and leaves alone one a person wrote. It explains both
+  modes and the "Records you keep" rules.
+- **Planner.** `buildPlanRequest` and `PLAN_PROPOSAL_SHAPE` ask for the plan, milestones, risks,
+  questions and specced parts with no sizing rules. `applyProposal` numbers new records after the
+  ones on disk, renames milestones the planner numbered so tasks follow them, and returns the record
+  files and PLAN.md. Main writes PLAN.md only when there is none, and otherwise only switches its
+  mode.
+- **Runs.** The service merges `planOptions` from PLAN.md, and a task file's `agent` becomes its
+  CLI unless this computer has an override. `reviewEachTask` pauses after every finished task
+  except the last. The leg prompt points at PLAN.md, at the decisions and workarounds folders when
+  they hold records, and at the archived attempt named by `learnFrom`.
+- **Journal.** The wiring wraps `addLegRecord`: every recorded leg appends to `journal/T###.md`,
+  with the commit when HEAD is newer than the session's start.
+- **Redo.** `relay:redo` archives handoff and journal into `handoffs/archive/T###-attempt-N.md`,
+  raises `attempt`, clears the timestamps, unticks the criteria, sets `agent` and `learnFrom`, and
+  can start the tasks. A task in progress is refused. The task detail has a Redo button.
+- **UI.** `PlanModePicker` (Fit the context budget / Plan only) in Split into tasks and on the
+  Blueprint review step; plan mode hides the budget and the over-budget options. The Blueprint
+  prompt with Relay on now asks for PLAN.md, `milestones/`, `risks/` and `questions/` instead of
+  MILESTONES.md and RISKS.md, and in plan mode for specced parts with no estimate or budget. Run
+  settings has Review each task.
+
+## Status
+
+Complete. Tests: core plan, parse, format, prompts, proposal, runner and Blueprint prompt cases;
+main plan files, redo, service, IPC (redo, plan-mode apply and decompose) cases; renderer split
+dialog, Redo dialog, run settings and Blueprint review step cases; a `relay.e2e.ts` case that plans
+in plan mode, runs a part, checks its journal, redoes it and sees the new session read the archive.

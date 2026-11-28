@@ -156,6 +156,8 @@ export interface RelayPlannerInput {
 
 export interface RelayDecomposeInput extends RelayPlannerInput {
   request: string;
+  /** `plan` breaks the job into specced parts with no context budget (E121). */
+  mode?: RelayPlanModeChoice;
 }
 
 export interface RelayReviseInput extends RelayPlannerInput {
@@ -183,7 +185,34 @@ export type RelayPlannerResult =
 export interface RelayApplyResult {
   written: string[];
   removed: string[];
+  /** Milestone, risk and question files written (E121). */
+  items?: string[];
+  /** PLAN.md was written or its mode changed. */
+  plan?: boolean;
   warnings: string[];
+}
+
+/** Plan mode (E121): how a split is sized. */
+export type RelayPlanModeChoice = 'fit' | 'plan';
+
+/** Runs one task, some tasks or every unfinished task again, as a new attempt. */
+export interface RelayRedoInput {
+  projectId: string;
+  /** The tasks to redo; `all` is every task that is not done. */
+  taskIds: string[] | 'all';
+  /** The CLI the new attempt runs with. Null keeps each task's own. */
+  agent: string | null;
+  /** The new attempt reads what the earlier one learned; off, it starts from the spec alone. */
+  keepLearnings: boolean;
+  /** Start the redone tasks now. */
+  start: boolean;
+}
+
+export interface RelayRedoResult {
+  redone: string[];
+  warnings: string[];
+  started: boolean;
+  error?: string;
 }
 
 /** A proposal an agent sent through the MCP bridge, waiting for the user in the app. */

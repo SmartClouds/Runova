@@ -4,6 +4,9 @@ import {
   type AppNotification,
   type EffortLevel,
   getCliDefinition,
+  journalResult,
+  planRunOptions,
+  type RelayLegRecord,
   type RelayRunChoice,
   recommendationFromAssessment,
   targetAIForCliId,
@@ -13,6 +16,7 @@ import type { RelayLegTabEvent } from '../../shared/relayTypes';
 import { relayArmedDir } from '../agents/claudeHooks';
 import { agentStatus } from '../agents/statusTracker';
 import { appNotificationInbox } from '../deploy/watcher';
+import { git } from '../git/plumbing';
 import { assessRun } from '../ipc/ai';
 import { broadcastToWindows } from '../ipc/send';
 import {
@@ -26,10 +30,12 @@ import { forwardNotification } from '../notifications/forward';
 import { setRelayHttpHandlers } from '../notifications/hookServer';
 import { showOsNotification } from '../notifications/osNotification';
 import { store } from '../store';
+import { findProjectScope } from '../worktrees/resolve';
 import { projectFor } from './board';
 import { contextWindowFor, readContextTokens } from './contextMeter';
 import { launchRelayLeg } from './launch';
 import { handleRelayMcp } from './mcp/tools';
+import { appendJournal, readPlan } from './planFiles';
 import { setRelayRuntime } from './runtime';
 import { createRelayDriver, type RelayDriver } from './service';
 import { addLegRecord, allRelayStates, relaySettings, saveRelayState } from './store';
@@ -53,6 +59,36 @@ const inbox = appNotificationInbox({
   update: (change) => store.updateAppNotifications(change),
   changed: () => broadcastToWindows(IPC.appNotifications.onChanged),
 });
+
+/** The short hash of the commit a session made, if HEAD is newer than the session's start. */
+async function commitSince(folderPath: string, since: number): Promise<string | null> {
+  const line = await git(folderPath, ['log', '-1', '--format=%h %ct']).catch(() => '');
+  const [hash, seconds] = line.trim().split(' ');
+  return hash && Number(seconds) * 1000 >= since ? hash : null;
+}
+
+/** Adds a finished session to its task's journal (E121). */
+async function journalLeg(projectId: string, record: RelayLegRecord): Promise<void> {
+  const project = await findProjectScope(projectId);
+  if (!project) return;
+  const settings = await relaySettings(projectId);
+  const folder = relayFolder(project.folderPath, settings.docsFolder);
+  const task = (await readBoardFiles(folder)).files.find((file) => file.task.id === record.taskId);
+  const committed = record.result === 'done' || record.result === 'testing';
+  await appendJournal(folder, record.taskId, {
+    at: new Date(record.endedAt).toISOString(),
+    legNo: record.legNo,
+    cliId: record.cliId,
+    model: record.model,
+    effort: record.effort,
+    result: journalResult(record.result),
+    tests: record.tests,
+    peakContextTokens: record.peakContextTokens,
+    minutes: Math.max(0, Math.round((record.endedAt - record.startedAt) / 60_000)),
+    commit: committed ? await commitSince(project.folderPath, record.startedAt) : null,
+    attempt: task?.task.attempt ?? null,
+  });
+}
 
 let driver: RelayDriver | null = null;
 let watcher: ReturnType<typeof createRelayWatcher> | null = null;
@@ -89,7 +125,14 @@ export async function startRelayService(): Promise<void> {
     now: Date.now,
     loadRelays: allRelayStates,
     saveRelay: saveRelayState,
-    addLegRecord,
+    addLegRecord: async (projectId, record) => {
+      await addLegRecord(projectId, record);
+      await journalLeg(projectId, record).catch(() => undefined);
+    },
+    planOptions: async (projectId, docsFolder) => {
+      const plan = await readPlan(await folderOf(projectId, docsFolder));
+      return plan ? planRunOptions(plan) : {};
+    },
     settings: relaySettings,
     boardFiles: async (projectId, docsFolder) =>
       (await readBoardFiles(await folderOf(projectId, docsFolder))).files,

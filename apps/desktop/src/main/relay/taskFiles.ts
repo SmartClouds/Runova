@@ -16,6 +16,7 @@ import {
   type RelayIssue,
   type RelayProposal,
   type RelayTaskStatus,
+  relayGuideIsStale,
   relayGuideMarkdown,
   renderHandoffTemplate,
   setFrontMatterValue,
@@ -23,6 +24,7 @@ import {
   taskIdFromFileName,
 } from '@runova/core';
 import type { RelayApplyResult } from '../../shared/relayTypes';
+import { itemIds, writeItemFile, writePlan } from './planFiles';
 
 /**
  * The Relay files inside a project: `<docs>/tasks/T###-slug.md` and `<docs>/tasks/handoffs/T###.md`.
@@ -43,7 +45,7 @@ export function relayFolder(projectFolder: string, docsFolder: string): RelayFol
   return { docsFolder: docs, tasksDir, handoffsDir: join(tasksDir, RELAY_HANDOFFS_DIR) };
 }
 
-async function exists(path: string): Promise<boolean> {
+export async function exists(path: string): Promise<boolean> {
   return stat(path).then(
     () => true,
     () => false,
@@ -51,7 +53,7 @@ async function exists(path: string): Promise<boolean> {
 }
 
 /** Written to a temporary name and renamed over, so a reader never sees half a file. */
-async function writeAtomic(path: string, content: string): Promise<void> {
+export async function writeAtomic(path: string, content: string): Promise<void> {
   const temporary = `${path}.${randomUUID()}.tmp`;
   try {
     await writeFile(temporary, content, 'utf-8');
@@ -113,14 +115,26 @@ async function findTaskFile(folder: RelayFolder, taskId: string): Promise<BoardF
   return board.files.find((file) => file.task.id === taskId) ?? null;
 }
 
+/**
+ * Sets a task's status. The first time it goes in progress it gets `started`, and going done
+ * stamps `finished`, so the plan keeps its own timeline.
+ */
 export async function setTaskStatusFile(
   folder: RelayFolder,
   taskId: string,
   status: RelayTaskStatus,
+  now: Date = new Date(),
 ): Promise<boolean> {
   const file = await findTaskFile(folder, taskId);
   if (!file) return false;
-  const next = setTaskStatus(file.content, status);
+  let next = setTaskStatus(file.content, status);
+  const stamp = now.toISOString().replace(/\.\d{3}Z$/, 'Z');
+  if (status === 'in-progress' && !file.task.started) {
+    next = setFrontMatterValue(next, 'started', stamp);
+  }
+  if (status === 'done' && file.task.status !== 'done') {
+    next = setFrontMatterValue(next, 'finished', stamp);
+  }
   if (next !== file.content) await writeAtomic(join(folder.tasksDir, file.file), next);
   return true;
 }
@@ -140,9 +154,14 @@ export async function reorderTaskFiles(folder: RelayFolder, taskIds: string[]): 
 export async function applyProposalFiles(
   folder: RelayFolder,
   proposal: RelayProposal,
+  options: { mode?: 'fit' | 'plan'; now?: Date } = {},
 ): Promise<RelayApplyResult> {
   const board = await readBoardFiles(folder);
-  const plan = applyProposal(board.files, proposal);
+  const plan = applyProposal(board.files, proposal, {
+    itemIds: await itemIds(folder),
+    mode: options.mode,
+    today: (options.now ?? new Date()).toISOString().slice(0, 10),
+  });
   const warnings = [...plan.warnings];
   await mkdir(folder.tasksDir, { recursive: true });
   // A board started from a proposal gets its guide too; sessions are pointed at it.
@@ -165,9 +184,16 @@ export async function applyProposalFiles(
     await mkdir(folder.handoffsDir, { recursive: true });
     await writeAtomic(handoffPath(folder, handoff.taskId), handoff.content);
   }
+  const items: string[] = [];
+  for (const item of plan.items) {
+    if (await writeItemFile(folder, item.kind, item.file, item.content)) items.push(item.file);
+  }
+  const planWritten = await writePlan(folder, plan.plan, options.mode);
   return {
     written: plan.write.map((file) => file.file),
     removed: plan.remove,
+    items,
+    plan: planWritten === 'written' || planWritten === 'updated',
     warnings,
   };
 }
@@ -178,9 +204,11 @@ async function handoffHasWork(folder: RelayFolder, taskId: string): Promise<bool
   return read !== null && Object.values(read.handoff.sections).some((text) => text.trim() !== '');
 }
 
+/** Writes the guide when it is missing, or replaces an older guide Runova wrote itself. */
 export async function ensureGuide(folder: RelayFolder): Promise<void> {
   const path = join(folder.tasksDir, RELAY_GUIDE_FILE);
-  if (await exists(path)) return;
+  const existing = await readFile(path, 'utf-8').catch(() => null);
+  if (existing !== null && !relayGuideIsStale(existing)) return;
   await mkdir(folder.tasksDir, { recursive: true });
   await writeAtomic(path, relayGuideMarkdown(folder.docsFolder));
 }
@@ -213,7 +241,7 @@ export interface HandoffRead {
 }
 
 /**
- * The hash covers the five sections only, not the front matter, so a session that bumps the leg
+ * The hash covers the sections only, not the front matter, so a session that bumps the leg
  * number and changes nothing else is seen as making no progress.
  */
 function sectionsHash(handoff: RelayHandoff): string {

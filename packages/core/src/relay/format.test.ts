@@ -6,13 +6,13 @@ import {
   isRelayTaskId,
   nextTaskId,
   parseTokenCount,
-  relayGuideMarkdown,
   renderHandoff,
   renderHandoffTemplate,
   taskFileName,
   taskIdFromFileName,
   taskRelPath,
 } from './format.js';
+import { RELAY_GUIDE_VERSION, relayGuideIsStale, relayGuideMarkdown } from './guide.js';
 import { parseHandoff } from './parse.js';
 
 describe('task ids and file names', () => {
@@ -106,7 +106,21 @@ describe('a written handoff', () => {
     expect(handoff).toMatchObject({ outcome: 'continue', tests: 'not-run', leg: 0 });
     expect(handoff.sections.done).toBe('The To do column renders, in src/board/Columns.tsx.');
     expect(handoff.sections.next).toBe('Add the Done column.');
-    expect(handoff.missingSections).toEqual(['decisions', 'rejected']);
+    expect(handoff.missingSections).toEqual([
+      'decisions',
+      'tests',
+      'workarounds',
+      'rejected',
+      'questions',
+    ]);
+  });
+
+  it('asks for tests run, workarounds and open questions', () => {
+    const template = renderHandoffTemplate({ id: 'T004', title: 'Board columns' });
+    expect(template).toContain('## Tests run');
+    expect(template).toContain('## Workarounds');
+    expect(template).toContain('## Open questions');
+    expect(template).toMatch(/W###/);
   });
 
   it('records finished work as done', () => {
@@ -130,5 +144,27 @@ describe('the RELAY.md guide', () => {
 
   it('never uses an em dash', () => {
     expect(guide).not.toContain('—');
+  });
+
+  it('explains the plan, the two modes and the records a session keeps', () => {
+    expect(guide).toContain('docs/tasks/PLAN.md');
+    expect(guide).toContain('mode: plan');
+    expect(guide).toContain('keepRolling: true');
+    for (const folder of ['milestones', 'decisions', 'workarounds', 'risks', 'questions']) {
+      expect(guide).toContain(`docs/tasks/${folder}/`);
+    }
+    expect(guide).toContain('waitingFor');
+    expect(guide).toContain('revisitBy');
+    expect(guide).toMatch(/journal.*never edit it/s);
+  });
+
+  it('replaces only an older guide Runova wrote itself', () => {
+    expect(relayGuideIsStale(guide)).toBe(false);
+    const version1 = '# Relay\n\nThis file is the format. Runova wrote it; keep it as it is.\n';
+    expect(relayGuideIsStale(version1)).toBe(true);
+    expect(relayGuideIsStale('<!-- runova-relay-guide: 1 -->\n# Relay\n')).toBe(true);
+    const newer = `<!-- runova-relay-guide: ${RELAY_GUIDE_VERSION + 1} -->`;
+    expect(relayGuideIsStale(newer)).toBe(false);
+    expect(relayGuideIsStale('# Our own task rules\n')).toBe(false);
   });
 });

@@ -3,25 +3,29 @@ import { HANDOFF_SECTIONS, isRelayTaskId, parseTokenCount, taskIdFromFileName } 
 import {
   type HandoffSectionKey,
   RELAY_OUTCOMES,
+  RELAY_PRIORITIES,
+  RELAY_SIZES,
   RELAY_TASK_STATUSES,
   RELAY_TEST_RESULTS,
   type RelayHandoff,
   type RelayIssue,
   type RelayOutcome,
+  type RelayPriority,
+  type RelaySize,
   type RelayTask,
   type RelayTaskDraft,
   type RelayTaskStatus,
   type RelayTestResult,
 } from './types.js';
 
-interface FrontMatter {
+export interface FrontMatter {
   data: Record<string, unknown>;
   body: string;
   issue: RelayIssue | null;
 }
 
 /** Splits `---` front matter off a Markdown file. Never throws: a bad block becomes an issue. */
-function splitFrontMatter(text: string): FrontMatter {
+export function splitFrontMatter(text: string): FrontMatter {
   const normalized = text.replace(/^﻿/, '').replace(/\r\n?/g, '\n');
   const lines = normalized.split('\n');
   if (lines[0]?.trim() !== '---') {
@@ -151,6 +155,77 @@ function readDepends(value: unknown, id: string, issues: RelayIssue[]): string[]
   return [...new Set(ids.filter((item) => isRelayTaskId(item) && item !== id))];
 }
 
+const PRIORITY_ALIASES: Record<string, RelayPriority> = {
+  '0': 'p0',
+  '1': 'p1',
+  '2': 'p2',
+  '3': 'p3',
+  critical: 'p0',
+  urgent: 'p0',
+  highest: 'p0',
+  high: 'p1',
+  medium: 'p2',
+  normal: 'p2',
+  low: 'p3',
+  lowest: 'p3',
+};
+
+const SIZE_ALIASES: Record<string, RelaySize> = {
+  'extra-small': 'xs',
+  tiny: 'xs',
+  small: 's',
+  medium: 'm',
+  large: 'l',
+  'extra-large': 'xl',
+  huge: 'xl',
+};
+
+/** Reads an optional choice: absent is null, anything unknown is null with an issue. */
+export function readChoice<T extends string>(
+  field: string,
+  value: unknown,
+  allowed: readonly T[],
+  aliases: Record<string, T>,
+  issues: RelayIssue[],
+): T | null {
+  const picked = pick(value, allowed, aliases);
+  if (picked === undefined) return null;
+  if (picked === null) {
+    issues.push({ field, message: `"${text(value)}" is not one of ${allowed.join(', ')}.` });
+    return null;
+  }
+  return picked;
+}
+
+const MILESTONE_ID = /^M\d{3,}$/;
+
+function readMilestone(value: unknown, issues: RelayIssue[]): string | null {
+  const id = text(value)?.toUpperCase() ?? null;
+  if (id === null) return null;
+  if (!MILESTONE_ID.test(id)) {
+    issues.push({ field: 'milestone', message: `"${id}" is not a milestone id like M001.` });
+    return null;
+  }
+  return id;
+}
+
+/** A date as written, cut to the day when it is a full timestamp. */
+function readDate(value: unknown): string | null {
+  const raw = text(value);
+  if (raw === null) return null;
+  return /^\d{4}-\d{2}-\d{2}T/.test(raw) ? raw.slice(0, 10) : raw;
+}
+
+function readAttempt(value: unknown, issues: RelayIssue[], field = 'attempt'): number | null {
+  if (value == null || value === '') return null;
+  const count = typeof value === 'number' ? value : Number(text(value));
+  if (!Number.isInteger(count) || count < 1) {
+    issues.push({ field, message: `"${text(value)}" is not an attempt number.` });
+    return null;
+  }
+  return count;
+}
+
 function titleFrom(body: string, file: string, id: string): string {
   const heading = /^#\s+(.+?)\s*#*\s*$/m.exec(body)?.[1];
   if (heading) return heading;
@@ -215,6 +290,16 @@ export function parseTaskFile(file: string, content: string): RelayTask {
     estimate: readTokens('estimate', data.estimate, issues),
     budget: readTokens('budget', data.budget, issues),
     specs: list(data.specs),
+    priority: readChoice('priority', data.priority, RELAY_PRIORITIES, PRIORITY_ALIASES, issues),
+    size: readChoice('size', data.size, RELAY_SIZES, SIZE_ALIASES, issues),
+    milestone: readMilestone(data.milestone, issues),
+    labels: [...new Set(list(data.labels))],
+    agent: text(data.agent),
+    due: readDate(data.due),
+    attempt: readAttempt(data.attempt, issues),
+    learnFrom: readAttempt(data.learnFrom, issues, 'learnFrom'),
+    started: text(data.started),
+    finished: text(data.finished),
     file,
     body,
     acceptance: countAcceptance(body),
@@ -224,7 +309,10 @@ export function parseTaskFile(file: string, content: string): RelayTask {
 
 /** Headings a handoff section is recognised by. Checked in this order, first match wins. */
 const SECTION_PATTERNS: readonly [HandoffSectionKey, RegExp][] = [
+  ['tests', /^(tests?( run| ran| results?)?|testing)\b/i],
   ['rejected', /rejected|ruled out|dead ends?|tried/i],
+  ['workarounds', /^(workarounds?|hacks?|temporary fix(es)?)\b/i],
+  ['questions', /^(open )?questions?\b/i],
   ['decisions', /^decisions?\b/i],
   ['next', /^next\b/i],
   ['purpose', /^(purpose|goal|why)\b/i],
@@ -237,20 +325,21 @@ function sectionFor(heading: string): HandoffSectionKey | null {
   return SECTION_PATTERNS.find(([, pattern]) => pattern.test(heading))?.[0] ?? null;
 }
 
-function readSections(body: string): Record<HandoffSectionKey, string> {
-  const collected: Record<HandoffSectionKey, string[]> = {
-    purpose: [],
-    done: [],
-    decisions: [],
-    rejected: [],
-    next: [],
-  };
+function readSections(body: string): {
+  sections: Record<HandoffSectionKey, string>;
+  present: Set<HandoffSectionKey>;
+} {
+  const collected = Object.fromEntries(
+    HANDOFF_SECTIONS.map((section) => [section.key, [] as string[]]),
+  ) as Record<HandoffSectionKey, string[]>;
+  const present = new Set<HandoffSectionKey>();
   let current: HandoffSectionKey | null = null;
   for (const line of body.split('\n')) {
     const heading = HEADING.exec(line)?.[1];
     const key = heading ? sectionFor(heading) : null;
     if (key) {
       current = key;
+      present.add(key);
       continue;
     }
     if (current) collected[current].push(line);
@@ -260,13 +349,10 @@ function readSections(body: string): Record<HandoffSectionKey, string> {
       .join('\n')
       .replace(/<!--[\s\S]*?-->/g, '')
       .trim();
-  return {
-    purpose: clean(collected.purpose),
-    done: clean(collected.done),
-    decisions: clean(collected.decisions),
-    rejected: clean(collected.rejected),
-    next: clean(collected.next),
-  };
+  const sections = Object.fromEntries(
+    HANDOFF_SECTIONS.map((section) => [section.key, clean(collected[section.key])]),
+  ) as Record<HandoffSectionKey, string>;
+  return { sections, present };
 }
 
 const TEST_ALIASES: Record<string, RelayTestResult> = {
@@ -316,7 +402,7 @@ export function parseHandoff(taskId: string, content: string): RelayHandoff {
     });
   }
   const leg = typeof data.leg === 'number' && Number.isInteger(data.leg) ? data.leg : null;
-  const sections = readSections(body);
+  const { sections, present } = readSections(body);
 
   return {
     taskId,
@@ -325,9 +411,10 @@ export function parseHandoff(taskId: string, content: string): RelayHandoff {
     leg,
     updated: text(data.updated),
     sections,
-    missingSections: HANDOFF_SECTIONS.map((section) => section.key).filter(
-      (key) => sections[key] === '',
-    ),
+    missingSections: HANDOFF_SECTIONS.filter(
+      (section) =>
+        sections[section.key] === '' && (!section.sinceTemplate || present.has(section.key)),
+    ).map((section) => section.key),
     issues,
   };
 }
@@ -464,10 +551,23 @@ export function renderTaskFile(draft: RelayTaskDraft): string {
   if (draft.specs && draft.specs.length > 0) {
     front.push('specs:', ...draft.specs.map((spec) => `  - ${scalar(spec)}`));
   }
+  if (draft.priority) front.push(`priority: ${draft.priority}`);
+  if (draft.size) front.push(`size: ${draft.size}`);
+  if (draft.milestone) front.push(`milestone: ${draft.milestone}`);
+  if (draft.labels && draft.labels.length > 0) front.push(`labels: ${yamlFlowList(draft.labels)}`);
+  if (draft.agent) front.push(`agent: ${scalar(draft.agent)}`);
+  if (draft.due) front.push(`due: ${scalar(draft.due)}`);
 
   const sections: string[] = [];
-  if (draft.goal?.trim()) sections.push(`## Goal\n\n${draft.goal.trim()}`);
-  if (draft.scope?.trim()) sections.push(`## Scope\n\n${draft.scope.trim()}`);
+  const section = (heading: string, value: string | undefined): void => {
+    if (value?.trim()) sections.push(`## ${heading}\n\n${value.trim()}`);
+  };
+  section('Goal', draft.goal);
+  section('Context', draft.context);
+  section('Approach', draft.approach);
+  section('Interfaces and files', draft.interfaces);
+  section('Scope', draft.scope);
+  section('Out of scope', draft.outOfScope);
   const criteria = (draft.acceptance ?? []).map((item) => item.trim()).filter(Boolean);
   if (criteria.length > 0) {
     const box = draft.status === 'done' ? '[x]' : '[ ]';
@@ -475,7 +575,13 @@ export function renderTaskFile(draft: RelayTaskDraft): string {
       `## Acceptance criteria\n\n${criteria.map((item) => `- ${box} ${item}`).join('\n')}`,
     );
   }
-  if (draft.testPlan?.trim()) sections.push(`## Test plan\n\n${draft.testPlan.trim()}`);
+  section('Test plan', draft.testPlan);
+  section('Risks', draft.risks);
 
   return `---\n${front.join('\n')}\n---\n${sections.length > 0 ? `\n${sections.join('\n\n')}\n` : ''}`;
 }
+
+/** A front matter value as text: trimmed, a date as ISO, empty as null. */
+export const frontMatterText = text;
+/** A front matter value as a list: a YAML list, a comma-separated string or one value. */
+export const frontMatterList = list;

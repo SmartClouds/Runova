@@ -18,6 +18,7 @@ import {
   type RelayLeg,
   type RelayLegRecord,
   type RelayNotice,
+  type RelayOptions,
   type RelayPermissionMode,
   type RelayRunChoice,
   type RelayState,
@@ -108,6 +109,26 @@ export interface RelayDriverDeps {
     projectId: string,
     proposal: RelayMcpProposal['proposal'],
   ): Promise<RelayApplyResult>;
+  /**
+   * The run options the project's PLAN.md sets (E121). They travel with the repo, so they win
+   * over this computer's settings; what the start asks for wins over both.
+   */
+  planOptions?(projectId: string, docsFolder: string): Promise<Partial<RelayOptions>>;
+}
+
+/**
+ * A task file's `agent` picks its CLI, unless this computer has its own override for the task.
+ */
+export function overridesWithAgents(
+  overrides: RelayProjectSettings['overrides'],
+  files: readonly BoardFile[],
+): RelayProjectSettings['overrides'] {
+  const merged = { ...overrides };
+  for (const { task } of files) {
+    if (!task.agent || merged[task.id]?.cliId) continue;
+    merged[task.id] = { ...merged[task.id], cliId: task.agent };
+  }
+  return merged;
 }
 
 const LIVE: ReadonlySet<RelayState['status']> = new Set(['waiting', 'running', 'paused']);
@@ -546,6 +567,9 @@ export function createRelayDriver(deps: RelayDriverDeps): RelayDriver {
     }
     if (queue.length === 0) return { ok: false, error: 'There is no task to run.' };
     if (live) return joinLive(live, input.trigger, queue, files);
+    const planOptions = deps.planOptions
+      ? await deps.planOptions(input.projectId, settings.docsFolder).catch(() => ({}))
+      : {};
     const now = deps.now();
     const relay = createRelay({
       id: `relay-${now.toString(36)}-${(proposalSeq++).toString(36)}`,
@@ -556,8 +580,8 @@ export function createRelayDriver(deps: RelayDriverDeps): RelayDriver {
       queue,
       trigger: input.trigger,
       defaults: { ...settings.defaults, ...input.defaults },
-      overrides: settings.overrides,
-      options: { ...settings.options, ...input.options },
+      overrides: overridesWithAgents(settings.overrides, files),
+      options: { ...settings.options, ...planOptions, ...input.options },
     });
     await serial(async () => {
       relays.set(relay.id, relay);

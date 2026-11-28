@@ -9,7 +9,7 @@ import {
 } from '@runova/core';
 import { describe, expect, it, vi } from 'vitest';
 import type { RelayProjectSettings } from '../../shared/relayTypes';
-import { createRelayDriver, type RelayDriverDeps } from './service';
+import { createRelayDriver, overridesWithAgents, type RelayDriverDeps } from './service';
 import type { HandoffRead } from './taskFiles';
 
 /** The Relay driver with fakes for everything outside it, and a clock moved by hand. */
@@ -169,6 +169,36 @@ describe('a relay from start to finish', () => {
     expect(h.deps.launch).toHaveBeenCalledTimes(2);
     expect(h.driver.active('p1')?.current).toMatchObject({ taskId: 'T002', tabId: 'tab-2' });
     expect(h.saved.at(-1)?.current?.taskId).toBe('T002');
+  });
+
+  it('runs a task with the agent its file names, and with the options the plan turns on', async () => {
+    const h = harness({ files: [file('T001', { agent: 'codex-cli' }), file('T002')] });
+    const planOptions = vi.fn(async () => ({ keepRolling: true as const }));
+    const driver = createRelayDriver({ ...h.deps, planOptions });
+    const started = await driver.start({
+      projectId: 'p1',
+      trigger: { kind: 'now' },
+      options: { reviewEachTask: true },
+    });
+    if (!started.ok) throw new Error(started.error);
+    expect(planOptions).toHaveBeenCalledWith('p1', 'docs');
+    expect(started.run.options).toMatchObject({ keepRolling: true, reviewEachTask: true });
+    await settle();
+    expect(h.deps.launch).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        taskId: 'T001',
+        choice: expect.objectContaining({ cliId: 'codex-cli' }),
+      }),
+    );
+  });
+
+  it('keeps an override made on this computer over the agent a task file names', () => {
+    const files = [file('T001', { agent: 'codex-cli' }), file('T002', { agent: 'gemini-cli' })];
+    expect(overridesWithAgents({ T001: { cliId: 'claude-code' } }, files)).toEqual({
+      T001: { cliId: 'claude-code' },
+      T002: { cliId: 'gemini-cli' },
+    });
   });
 
   it('adds tasks started after one of its tasks to the live relay', async () => {

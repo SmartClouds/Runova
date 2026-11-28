@@ -18,6 +18,7 @@ import {
 } from '@/components/icons';
 import { BudgetPicker } from '@/components/relay/BudgetPicker';
 import { OverBudgetOptions } from '@/components/relay/OverBudgetOptions';
+import { PlanModePicker } from '@/components/relay/PlanModePicker';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -99,10 +100,11 @@ export function BlueprintReviewStep({
       }
       // The tasks the agent writes run with the project's relay settings, so they carry these.
       try {
+        const planOnly = relay.mode === 'plan';
         await window.runova.relay.saveSettings(project.id, {
           options: {
-            keepRolling: relay.keepRolling ?? false,
-            runPastBudget: relay.runPastBudget ?? false,
+            keepRolling: planOnly || (relay.keepRolling ?? false),
+            runPastBudget: planOnly || (relay.runPastBudget ?? false),
           },
         });
       } catch {
@@ -206,6 +208,12 @@ export function BlueprintReviewStep({
             </p>
           </div>
           {relay.enabled ? (
+            <PlanModePicker
+              value={relay.mode ?? 'fit'}
+              onChange={(mode) => onRelayChange({ ...relay, mode })}
+            />
+          ) : null}
+          {relay.enabled && relay.mode !== 'plan' ? (
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs text-muted-foreground">Context per session</span>
               <BudgetPicker
@@ -214,7 +222,7 @@ export function BlueprintReviewStep({
               />
             </div>
           ) : null}
-          {relay.enabled ? (
+          {relay.enabled && relay.mode !== 'plan' ? (
             <OverBudgetOptions
               value={{
                 keepRolling: relay.keepRolling ?? false,

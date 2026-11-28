@@ -1607,6 +1607,7 @@ const blueprints = {
       budgetTokens: number;
       keepRolling?: boolean;
       runPastBudget?: boolean;
+      mode?: 'fit' | 'plan';
     },
   ): Promise<ProjectBlueprint> => ipcRenderer.invoke(IPC.blueprints.setRelay, projectId, value),
   /** Null when the picker was cancelled, so the caller can tell that from "nothing changed". */

@@ -24,7 +24,17 @@ export interface BlueprintPromptInput {
   /** Ask the agent to list its intended phases and epics before writing anything. */
   confirmBeforeWriting: boolean;
   /** Write the backlog as Relay task files sized to this context budget, instead of BACKLOG.md. */
-  relay?: { enabled: boolean; budgetTokens: number; keepRolling?: boolean };
+  relay?: {
+    enabled: boolean;
+    budgetTokens: number;
+    keepRolling?: boolean;
+    /** `plan` writes parts with full specs and no budget (E121). */
+    mode?: 'fit' | 'plan';
+  };
+}
+
+function planMode(input: BlueprintPromptInput): boolean {
+  return relayOn(input) && input.relay?.mode === 'plan';
 }
 
 function relayOn(input: BlueprintPromptInput): boolean {
@@ -79,16 +89,37 @@ const ARTIFACTS = (
 3. \`${input.docsFolder}/epics/NN-slug.md\`: one file per epic, numbered in delivery order, each with its
    objective, the user-visible outcome, acceptance criteria, dependencies, and the risks it carries.
 ${backlogArtifact(input)}
-5. \`${input.docsFolder}/MILESTONES.md\`: the order the phases ship in and what can be demonstrated at each one.
+${
+  relayOn(input)
+    ? planPackArtifacts(input)
+    : `5. \`${input.docsFolder}/MILESTONES.md\`: the order the phases ship in and what can be demonstrated at each one.
 6. \`${input.docsFolder}/RISKS.md\`: technical and delivery risks, each with impact, likelihood, and a
-   concrete mitigation.`;
+   concrete mitigation.`
+}`;
+
+/** With Relay on, the plan, milestones, risks and open questions are records next to the tasks. */
+function planPackArtifacts(input: BlueprintPromptInput): string {
+  const tasks = tasksFolderRelPath(input.docsFolder);
+  const mode = planMode(input) ? 'plan' : 'fit';
+  return `5. \`${tasks}/PLAN.md\`: the plan, with YAML front matter \`title\`, \`mode: ${mode}\` and
+   \`definitionOfDone\` (checks every task must pass), and the sections Goal, Definition of done and
+   Out of scope.
+6. \`${tasks}/milestones/M001-slug.md\`: one file per milestone, in the order they ship, each with what
+   can be demonstrated, its exit criteria as checkboxes, and \`target\` when the blueprint gives a date.
+7. \`${tasks}/risks/R001-slug.md\`: one file per technical or delivery risk, with \`likelihood\` and
+   \`impact\` (low, medium or high) and the sections Risk and Mitigation.
+8. \`${tasks}/questions/Q001-slug.md\`: one file per question only the author can answer, with the
+   sections Question and Answer (left empty).`;
+}
 
 function rules(input: BlueprintPromptInput): string {
-  const sizing = relayOn(input)
-    ? input.relay?.keepRolling
-      ? '- Size tasks by the context budget under "Relay tasks"; a task may run over several AI sessions, but each one ends with something testable.'
-      : '- Size tasks by the context budget under "Relay tasks", so each fits one AI session.'
-    : `- Size tasks so each one is a single focused change. Split anything that would take more than
+  const sizing = planMode(input)
+    ? '- Size tasks by what they deliver, as the parts of the plan described under "Relay tasks"; each one ends with something testable.'
+    : relayOn(input)
+      ? input.relay?.keepRolling
+        ? '- Size tasks by the context budget under "Relay tasks"; a task may run over several AI sessions, but each one ends with something testable.'
+        : '- Size tasks by the context budget under "Relay tasks", so each fits one AI session.'
+      : `- Size tasks so each one is a single focused change. Split anything that would take more than
   about a day.`;
   const links = relayOn(input) ? 'its task files' : 'its backlog tasks';
   return `- Ground every artifact in the blueprint above. Where the blueprint is silent, write the
@@ -106,7 +137,7 @@ function relaySection(input: BlueprintPromptInput): string {
 
 # Relay tasks
 
-${blueprintRelaySection(input.docsFolder, input.relay.budgetTokens, input.relay.keepRolling)}`;
+${blueprintRelaySection(input.docsFolder, input.relay.budgetTokens, input.relay.keepRolling, input.relay.mode)}`;
 }
 
 /**
@@ -176,7 +207,7 @@ The prompt you write must instruct the assistant to:
 - keep the technology choices exactly as the blueprint states them;
 - cross-link the artifacts so the roadmap, the epics, and the backlog reference each other;${
     relayOn(input) && input.relay
-      ? `\n- write the backlog as Relay task files in \`${tasksFolderRelPath(docsFolder)}/\` rather than one backlog file, ${input.relay.keepRolling ? `each task sized against a ${formatTokenCount(input.relay.budgetTokens)}-token context budget per session (a task may take several sessions)` : `each task sized to finish in one AI session with a ${formatTokenCount(input.relay.budgetTokens)}-token context budget`}, exactly as the "Relay tasks" text below describes (include that text in the prompt);`
+      ? `\n- write the backlog as Relay task files in \`${tasksFolderRelPath(docsFolder)}/\` rather than one backlog file, ${planMode(input) ? 'each task a part of the plan sized by what it delivers, with a full spec and no context budget' : input.relay.keepRolling ? `each task sized against a ${formatTokenCount(input.relay.budgetTokens)}-token context budget per session (a task may take several sessions)` : `each task sized to finish in one AI session with a ${formatTokenCount(input.relay.budgetTokens)}-token context budget`}, exactly as the "Relay tasks" text below describes (include that text in the prompt);`
       : ''
   }${
     confirmBeforeWriting

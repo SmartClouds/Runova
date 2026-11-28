@@ -49,7 +49,7 @@ const TOOLS = [
   {
     name: 'finish_leg',
     description:
-      'Report that this session is finished. Write the handoff file first. Runova checks it is new and has all five sections, and tells you what to fix if not. Make this your very last action.',
+      'Report that this session is finished. Write the handoff file first. Runova checks it is new and has every section filled in, and tells you what to fix if not. Make this your very last action.',
     inputSchema: {
       type: 'object',
       properties: {

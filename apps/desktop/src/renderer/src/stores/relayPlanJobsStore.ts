@@ -1,5 +1,5 @@
 import type { RelayProposal } from '@runova/core';
-import type { RelayPlannerResult } from '@shared/relayTypes';
+import type { RelayPlanModeChoice, RelayPlannerResult } from '@shared/relayTypes';
 import { toast } from 'sonner';
 import { create } from 'zustand';
 import { type RelayPlanKind, useRelayPlanDialogStore } from './relayPlanDialogStore';
@@ -27,6 +27,8 @@ export interface PlanJob {
   budget: number;
   keepRolling?: boolean;
   runPastBudget?: boolean;
+  /** Plan mode (E121): parts with full specs and no budget. */
+  mode?: RelayPlanModeChoice;
   recordDone?: boolean;
   status: 'running' | 'done' | 'failed';
   result: PlannedResult | null;
@@ -44,6 +46,7 @@ export type PlanJobStart = Pick<
   | 'budget'
   | 'keepRolling'
   | 'runPastBudget'
+  | 'mode'
   | 'recordDone'
 >;
 

@@ -6,10 +6,11 @@ import {
 } from '@runova/core';
 import type { RelayBoard } from '@shared/relayTypes';
 import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 import { MarkdownMessage } from '@/components/askAi/MarkdownMessage';
 import { CliLogo } from '@/components/cliLogos';
 import { MarkdownPreview } from '@/components/editor/MarkdownPreview';
-import { ArrowRight, CircleCheck, Play, Sliders, X } from '@/components/icons';
+import { ArrowRight, CircleCheck, Play, Sliders, Undo, X } from '@/components/icons';
 import { LoadFailure } from '@/components/pageKit';
 import { Button } from '@/components/ui/button';
 import {
@@ -22,6 +23,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { SimpleTooltip } from '@/components/ui/tooltip';
 import { queryKeys } from '@/lib/queryKeys';
 import { cn } from '@/lib/utils';
+import { RedoDialog } from './RedoDialog';
 import { RelayRunSettings } from './RelayRunSettings';
 import { BOARD_COLUMNS, choiceLabel, columnSpec, formatDuration } from './relayView';
 import { runTaskInNewSession } from './useRelay';
@@ -91,6 +93,7 @@ export function RelayTaskDetail({
   const column = columnSpec(card?.status ?? 'todo');
   const detail = query.data;
   const handoff = detail?.handoff ?? null;
+  const [redoOpen, setRedoOpen] = useState(false);
 
   return (
     <aside
@@ -142,6 +145,22 @@ export function RelayTaskDetail({
             <Sliders /> Run settings
           </Button>
         </RelayRunSettings>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          disabled={card?.status === 'in-progress'}
+          onClick={() => setRedoOpen(true)}
+        >
+          <Undo /> Redo
+        </Button>
+        <RedoDialog
+          open={redoOpen}
+          onOpenChange={setRedoOpen}
+          projectId={board.projectId}
+          taskIds={[taskId]}
+          currentAgent={card?.agent ?? null}
+        />
         {onMarkDone ? (
           <Button type="button" size="sm" variant="ghost" onClick={onMarkDone}>
             <CircleCheck /> Mark done
@@ -199,6 +218,13 @@ export function RelayTaskDetail({
                 <ol className="relative space-y-3 border-l border-border/80 pl-4">
                   {HANDOFF_SECTIONS.map((section) => {
                     const text = handoff.sections[section.key];
+                    // A handoff from before Tests run, Workarounds and Open questions has no
+                    // heading for them; it is not missing anything.
+                    const absent =
+                      section.sinceTemplate &&
+                      !text &&
+                      !handoff.missingSections.includes(section.key);
+                    if (absent) return null;
                     return (
                       <li key={section.key} className="relative">
                         <span

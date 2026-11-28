@@ -11,8 +11,11 @@ import type {
   RelayDecomposeInput,
   RelayLegTabEvent,
   RelayMcpProposal,
+  RelayPlanModeChoice,
   RelayPlannerResult,
   RelayProjectSettings,
+  RelayRedoInput,
+  RelayRedoResult,
   RelayReviseInput,
   RelayRunView,
   RelaySettingsPatch,
@@ -67,8 +70,14 @@ export function createRelay() {
       ipcRenderer.invoke(IPC.relay.catchUp, input),
     cancelPlanner: (requestId: string): Promise<void> =>
       ipcRenderer.invoke(IPC.relay.cancelPlanner, requestId),
-    applyProposal: (projectId: string, proposal: RelayProposal): Promise<RelayApplyResult> =>
-      ipcRenderer.invoke(IPC.relay.applyProposal, projectId, proposal),
+    applyProposal: (
+      projectId: string,
+      proposal: RelayProposal,
+      options?: { mode?: RelayPlanModeChoice },
+    ): Promise<RelayApplyResult> =>
+      ipcRenderer.invoke(IPC.relay.applyProposal, projectId, proposal, options),
+    redo: (input: RelayRedoInput): Promise<RelayRedoResult> =>
+      ipcRenderer.invoke(IPC.relay.redo, input),
     decideProposal: (proposalId: string, accept: boolean): Promise<RelayApplyResult | null> =>
       ipcRenderer.invoke(IPC.relay.decideProposal, proposalId, accept),
     pendingProposals: (): Promise<RelayMcpProposal[]> =>

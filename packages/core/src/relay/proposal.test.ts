@@ -320,3 +320,77 @@ describe('diffProposal', () => {
     ]);
   });
 });
+
+describe('a plan-mode proposal', () => {
+  const board = [existing('T001', 'Login', { status: 'done' })];
+  const answer = JSON.stringify({
+    summary: 'Two parts in one milestone.',
+    plan: { title: 'Paperless clinic', goal: 'No paper charts.', definitionOfDone: ['CI green'] },
+    milestones: [{ id: 'M001', title: 'Pilot', goal: 'One ward.', exitCriteria: ['Ward A live'] }],
+    risks: [
+      { title: 'Staff pushback', likelihood: 'High', impact: 'medium', mitigation: 'Training.' },
+    ],
+    questions: [{ title: 'Which ward first?', question: 'A or B?' }],
+    add: [
+      {
+        id: 'T002',
+        title: 'Chart import',
+        milestone: 'M001',
+        priority: 'P1',
+        size: 'Large',
+        context: 'Charts are scanned PDFs.',
+        approach: 'OCR then review.',
+        acceptance: ['Imports a scanned chart'],
+      },
+      { id: 'T003', title: 'Ward view', milestone: 'M009', priority: 'whenever' },
+    ],
+  });
+
+  it('reads the plan, milestones, risks and questions, and drops odd choices', () => {
+    const parsed = parsePlanProposal(answer);
+    if (!parsed.ok) throw new Error(parsed.error);
+    expect(parsed.proposal.plan?.title).toBe('Paperless clinic');
+    expect(parsed.proposal.risks?.[0]).toMatchObject({ likelihood: 'high', impact: 'medium' });
+    expect(parsed.proposal.add[0]).toMatchObject({ priority: 'p1', size: 'l' });
+    expect(parsed.proposal.add[1].priority).toBeUndefined();
+  });
+
+  it('writes the records with free ids, links tasks to milestones and writes the plan', () => {
+    const parsed = parsePlanProposal(answer);
+    if (!parsed.ok) throw new Error(parsed.error);
+    const plan = applyProposal(board, parsed.proposal, {
+      mode: 'plan',
+      today: '2026-11-28',
+      itemIds: { milestone: ['M001', 'M002'], risk: ['R004'] },
+    });
+    expect(plan.items.map((item) => [item.kind, item.file])).toEqual([
+      ['milestone', 'M003-pilot.md'],
+      ['risk', 'R005-staff-pushback.md'],
+      ['question', 'Q001-which-ward-first.md'],
+    ]);
+    const tasks = plan.write.map((file) => parseTaskFile(file.file, file.content));
+    expect(tasks[0]).toMatchObject({ id: 'T002', milestone: 'M003', priority: 'p1', size: 'l' });
+    expect(tasks[0].body).toContain('## Context');
+    expect(tasks[1].milestone).toBeNull();
+    expect(plan.warnings).toEqual([
+      'T003 named milestone M009, which does not exist; that was dropped.',
+    ]);
+    expect(plan.items[0].content).toContain('created: 2026-11-28');
+    expect(plan.items[0].content).toContain('- [ ] Ward A live');
+    expect(plan.plan).toContain('mode: plan');
+    expect(plan.plan).toContain('keepRolling: true');
+    expect(plan.plan).toContain('# Paperless clinic');
+  });
+
+  it('writes no plan and no records for an ordinary proposal', () => {
+    const plan = applyProposal(board, {
+      summary: '',
+      add: [{ title: 'Search' }],
+      change: [],
+      split: [],
+      remove: [],
+    });
+    expect(plan.items).toEqual([]);
+    expect(plan.plan).toBeNull();
+  });
+});

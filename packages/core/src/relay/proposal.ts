@@ -15,7 +15,15 @@ import {
   yamlFlowList,
   yamlScalar,
 } from './parse.js';
-import type { RelayTask } from './types.js';
+import {
+  itemFileName,
+  nextItemId,
+  RELAY_LEVELS,
+  type RelayItemKind,
+  renderItemFile,
+  renderPlanFile,
+} from './plan.js';
+import { RELAY_PRIORITIES, RELAY_SIZES, type RelayTask } from './types.js';
 
 const idList = z
   .union([z.array(z.string()), z.string()])
@@ -49,6 +57,31 @@ const proposalHandoff = z.object({
   next: handoffText,
 });
 
+/**
+ * A choice a planner may spell loosely (`P1`, `High`): lower-cased and matched, and dropped when it
+ * is none of them, so one odd value never sinks the whole plan.
+ */
+function looseChoice<T extends string>(allowed: readonly T[], aliases: Record<string, T> = {}) {
+  return z
+    .unknown()
+    .transform((value): T | undefined => {
+      if (typeof value !== 'string' && typeof value !== 'number') return undefined;
+      const word = String(value).trim().toLowerCase();
+      if ((allowed as readonly string[]).includes(word)) return word as T;
+      return aliases[word];
+    })
+    .optional();
+}
+
+const priority = looseChoice(RELAY_PRIORITIES, {
+  critical: 'p0',
+  high: 'p1',
+  medium: 'p2',
+  low: 'p3',
+});
+const size = looseChoice(RELAY_SIZES, { small: 's', medium: 'm', large: 'l' });
+const level = looseChoice(RELAY_LEVELS, { med: 'medium' });
+
 const taskFields = {
   title: z.string().trim().min(1, 'Every task needs a title.'),
   epic: z.string().trim().nullish(),
@@ -57,10 +90,19 @@ const taskFields = {
   estimate: tokens.optional(),
   budget: tokens.optional(),
   specs: z.array(z.string()).optional(),
+  priority,
+  size,
+  milestone: z.string().trim().toUpperCase().nullish(),
+  labels: z.array(z.string()).optional(),
   goal: text.optional(),
+  context: text.optional(),
+  approach: text.optional(),
+  interfaces: text.optional(),
   scope: text.optional(),
+  outOfScope: text.optional(),
   acceptance: z.array(z.string()).optional(),
   testPlan: text.optional(),
+  risks: text.optional(),
   status: proposalStatus.optional(),
   handoff: proposalHandoff.optional(),
 };
@@ -71,8 +113,40 @@ const proposalChange = z
   .partial()
   .extend({ id: z.string().trim().toUpperCase() });
 
+const proposalPlan = z.object({
+  title: z.string().trim().min(1),
+  goal: text.optional(),
+  definitionOfDone: z.array(z.string()).optional(),
+  outOfScope: text.optional(),
+});
+
+const proposalMilestone = z.object({
+  id: z.string().trim().toUpperCase().optional(),
+  title: z.string().trim().min(1, 'Every milestone needs a title.'),
+  goal: text.optional(),
+  target: z.string().trim().nullish(),
+  exitCriteria: z.array(z.string()).optional(),
+});
+
+const proposalRisk = z.object({
+  title: z.string().trim().min(1, 'Every risk needs a title.'),
+  likelihood: level,
+  impact: level,
+  risk: text.optional(),
+  mitigation: text.optional(),
+});
+
+const proposalQuestion = z.object({
+  title: z.string().trim().min(1, 'Every question needs a title.'),
+  question: text.optional(),
+});
+
 const proposalSchema = z.object({
   summary: z.string().optional().default(''),
+  plan: proposalPlan.optional(),
+  milestones: z.array(proposalMilestone).optional().default([]),
+  risks: z.array(proposalRisk).optional().default([]),
+  questions: z.array(proposalQuestion).optional().default([]),
   add: z.array(proposalTask).optional().default([]),
   change: z.array(proposalChange).optional().default([]),
   split: z
@@ -97,8 +171,18 @@ export interface ProposalRemoval {
 }
 
 /** What a planner proposes for the board. Nothing is written until the user applies it. */
+export type ProposalPlanInfo = z.infer<typeof proposalPlan>;
+export type ProposalMilestone = z.infer<typeof proposalMilestone>;
+export type ProposalRisk = z.infer<typeof proposalRisk>;
+export type ProposalQuestion = z.infer<typeof proposalQuestion>;
+
 export interface RelayProposal {
   summary: string;
+  /** Plan mode: the plan itself, written to PLAN.md when the project has none. */
+  plan?: ProposalPlanInfo;
+  milestones?: ProposalMilestone[];
+  risks?: ProposalRisk[];
+  questions?: ProposalQuestion[];
   add: ProposalTask[];
   change: ProposalChange[];
   split: ProposalSplit[];
@@ -153,8 +237,21 @@ export interface ProposalPlan {
    * over a handoff a session has filled in.
    */
   handoffs: { taskId: string; content: string }[];
+  /** New milestones, risks and questions, by kind and file name inside the kind's folder. */
+  items: { kind: RelayItemKind; file: string; content: string }[];
+  /** PLAN.md for a plan-mode proposal. Main writes it only when the project has none. */
+  plan: string | null;
   /** Parts of the proposal that were left out, and why. */
   warnings: string[];
+}
+
+export interface ApplyProposalOptions {
+  /** The ids already used in each item folder, so new ones continue the numbering. */
+  itemIds?: Partial<Record<RelayItemKind, readonly string[]>>;
+  /** The plan's mode, written to a new PLAN.md. */
+  mode?: 'fit' | 'plan';
+  /** Today's date (`2026-11-28`), stamped on new records. */
+  today?: string;
 }
 
 /**
@@ -209,9 +306,113 @@ export function withBudget(proposal: RelayProposal, budget: number): RelayPropos
   };
 }
 
-export function applyProposal(board: readonly BoardFile[], proposal: RelayProposal): ProposalPlan {
+/**
+ * Milestones, risks and questions as files with the next free ids. A milestone the planner numbered
+ * itself is renamed like a task, so the tasks that name it follow.
+ */
+function planItems(
+  proposal: RelayProposal,
+  options: ApplyProposalOptions,
+): { items: ProposalPlan['items']; milestoneIds: Map<string, string> } {
+  const items: ProposalPlan['items'] = [];
+  const milestoneIds = new Map<string, string>();
+  const used = (kind: RelayItemKind) => new Set(options.itemIds?.[kind] ?? []);
+  const take = (kind: RelayItemKind, pool: Set<string>): string => {
+    const id = nextItemId(kind, pool);
+    pool.add(id);
+    return id;
+  };
+  const created = options.today ?? null;
+
+  const milestones = used('milestone');
+  for (const milestone of proposal.milestones ?? []) {
+    const id = take('milestone', milestones);
+    if (milestone.id) milestoneIds.set(milestone.id, id);
+    const exit = (milestone.exitCriteria ?? []).map((item) => item.trim()).filter(Boolean);
+    items.push({
+      kind: 'milestone',
+      file: itemFileName(id, milestone.title),
+      content: renderItemFile({
+        kind: 'milestone',
+        id,
+        title: milestone.title,
+        created,
+        target: milestone.target ?? null,
+        sections: {
+          Goal: milestone.goal ?? '',
+          'Exit criteria': exit.map((item) => `- [ ] ${item}`).join('\n'),
+        },
+      }),
+    });
+  }
+  const risks = used('risk');
+  for (const risk of proposal.risks ?? []) {
+    const id = take('risk', risks);
+    items.push({
+      kind: 'risk',
+      file: itemFileName(id, risk.title),
+      content: renderItemFile({
+        kind: 'risk',
+        id,
+        title: risk.title,
+        created,
+        likelihood: risk.likelihood ?? null,
+        impact: risk.impact ?? null,
+        sections: { Risk: risk.risk ?? '', Mitigation: risk.mitigation ?? '' },
+      }),
+    });
+  }
+  const questions = used('question');
+  for (const question of proposal.questions ?? []) {
+    const id = take('question', questions);
+    items.push({
+      kind: 'question',
+      file: itemFileName(id, question.title),
+      content: renderItemFile({
+        kind: 'question',
+        id,
+        title: question.title,
+        created,
+        sections: { Question: question.question ?? '' },
+      }),
+    });
+  }
+  return { items, milestoneIds };
+}
+
+function planFile(proposal: RelayProposal, options: ApplyProposalOptions): string | null {
+  if (!proposal.plan) return null;
+  return renderPlanFile({
+    title: proposal.plan.title,
+    mode: options.mode ?? 'fit',
+    keepRolling: options.mode === 'plan',
+    runPastBudget: options.mode === 'plan',
+    goal: proposal.plan.goal,
+    definitionOfDone: proposal.plan.definitionOfDone,
+    outOfScope: proposal.plan.outOfScope,
+  });
+}
+
+export function applyProposal(
+  board: readonly BoardFile[],
+  proposal: RelayProposal,
+  options: ApplyProposalOptions = {},
+): ProposalPlan {
   const byId = new Map(board.map((entry) => [entry.task.id, entry]));
   const warnings: string[] = [];
+  const { items, milestoneIds } = planItems(proposal, options);
+  const knownMilestones = new Set([
+    ...(options.itemIds?.milestone ?? []),
+    ...milestoneIds.values(),
+  ]);
+  /** A task's milestone as it will be named, or null when it names none that exists. */
+  const milestoneOf = (owner: string, named: string | null | undefined): string | null => {
+    if (!named) return null;
+    const id = milestoneIds.get(named) ?? named;
+    if (knownMilestones.has(id)) return id;
+    warnings.push(`${owner} named milestone ${named}, which does not exist; that was dropped.`);
+    return null;
+  };
   const isDone = (id: string): boolean => byId.get(id)?.task.status === 'done';
   const { added, parts, renamed } = assignIds(board, proposal);
   const newIds = new Set([...added, ...[...parts.values()].flat()]);
@@ -280,7 +481,13 @@ export function applyProposal(board: readonly BoardFile[], proposal: RelayPropos
     }
     return {
       file: taskFileName(id, task.title),
-      content: renderTaskFile({ ...task, id, status, depends }),
+      content: renderTaskFile({
+        ...task,
+        id,
+        status,
+        depends,
+        milestone: milestoneOf(id, task.milestone),
+      }),
     };
   });
 
@@ -312,7 +519,12 @@ export function applyProposal(board: readonly BoardFile[], proposal: RelayPropos
         depends.length > 0 ? yamlFlowList(depends) : null,
       );
     }
-    if (change) content = applyChange(content, change);
+    if (change) {
+      content = applyChange(content, change);
+      if (change.milestone !== undefined) {
+        content = setFrontMatterValue(content, 'milestone', milestoneOf(task.id, change.milestone));
+      }
+    }
     if (change?.handoff) {
       const status = change.status ?? 'todo';
       handoffs.push(
@@ -323,7 +535,7 @@ export function applyProposal(board: readonly BoardFile[], proposal: RelayPropos
   }
 
   const remove = board.filter((entry) => removed.has(entry.task.id)).map((entry) => entry.file);
-  return { write, remove, warnings, handoffs };
+  return { write, remove, warnings, handoffs, items, plan: planFile(proposal, options) };
 }
 
 function startingHandoff(
@@ -374,8 +586,21 @@ function applyChange(content: string, change: ProposalChange): string {
       'specs',
       change.specs.length > 0 ? yamlFlowList(change.specs) : null,
     );
+  if (change.priority) next = setFrontMatterValue(next, 'priority', change.priority);
+  if (change.size) next = setFrontMatterValue(next, 'size', change.size);
+  if (change.labels)
+    next = setFrontMatterValue(
+      next,
+      'labels',
+      change.labels.length > 0 ? yamlFlowList(change.labels) : null,
+    );
   if (change.goal) next = setBodySection(next, 'Goal', change.goal);
+  if (change.context) next = setBodySection(next, 'Context', change.context);
+  if (change.approach) next = setBodySection(next, 'Approach', change.approach);
+  if (change.interfaces) next = setBodySection(next, 'Interfaces and files', change.interfaces);
   if (change.scope) next = setBodySection(next, 'Scope', change.scope);
+  if (change.outOfScope) next = setBodySection(next, 'Out of scope', change.outOfScope);
+  if (change.risks) next = setBodySection(next, 'Risks', change.risks);
   if (change.acceptance?.length) {
     next = setBodySection(
       next,
@@ -427,6 +652,9 @@ const DIFF_FIELDS = [
   'depends',
   'estimate',
   'budget',
+  'priority',
+  'size',
+  'milestone',
   'goal',
   'scope',
   'acceptance',
@@ -458,6 +686,9 @@ export function diffProposal(
           depends: task.depends,
           estimate: task.estimate,
           budget: task.budget,
+          priority: task.priority,
+          size: task.size,
+          milestone: task.milestone,
         }
       : {};
     const fields: ProposalFieldChange[] = [];

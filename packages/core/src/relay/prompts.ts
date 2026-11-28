@@ -22,6 +22,15 @@ export interface LegPromptInput {
   planFirst: boolean;
   /** The relay runs past the budget: the session is never asked to hand off for its context. */
   runPastBudget?: boolean;
+  /** The project has a PLAN.md, which every session reads first (E121). */
+  hasPlan?: boolean;
+  /** Earlier tasks left decisions or workarounds this session should know about. */
+  hasRecords?: boolean;
+  /**
+   * A redo that keeps what the earlier attempt learned: the project-relative path of that
+   * attempt's archive. Null or absent when the task starts from its spec alone.
+   */
+  previousAttempt?: string | null;
 }
 
 /**
@@ -44,12 +53,26 @@ function commandLineSafe(text: string): string {
 export function buildLegPrompt(input: LegPromptInput): string {
   const { task, docsFolder, legNo } = input;
   const handoff = handoffRelPath(docsFolder, task.id);
+  const tasks = tasksFolderRelPath(docsFolder);
   const read = [
+    ...(input.hasPlan
+      ? [`- ${tasks}/PLAN.md (the plan: its goal, mode and definition of done)`]
+      : []),
     `- ${taskRelPath(docsFolder, task.file)} (the task)`,
     `- ${handoff} (its handoff${input.continuation ? ', which says where the last session stopped' : '. When it already records work, build on it from its Next step'})`,
     ...input.dependsOn.map(
       (id) => `- ${handoffRelPath(docsFolder, id)} (handoff of ${id}, which this task builds on)`,
     ),
+    ...(input.hasRecords
+      ? [
+          `- ${tasks}/decisions/ and ${tasks}/workarounds/ (what earlier tasks decided and worked around; open the ones that touch this task)`,
+        ]
+      : []),
+    ...(input.previousAttempt
+      ? [
+          `- ${input.previousAttempt} (an earlier attempt at this task: learn from its decisions, workarounds and what it ruled out, but build this attempt from the spec)`,
+        ]
+      : []),
   ];
   const lines = [
     `Runova Relay: task ${task.id} (${commandLineSafe(task.title)}), session ${legNo}.`,
@@ -73,7 +96,8 @@ export function buildLegPrompt(input: LegPromptInput): string {
     input.runPastBudget
       ? 'This session has no context limit from Runova. Keep going until the task is done or blocked; let the CLI compact its context when it needs to.'
       : `This session may use ${formatTokenCount(input.budget)} tokens of context. When you near it, or Runova says it is reached, finish the current step, write the handoff with outcome: continue and stop.`,
-    `Before you stop, rewrite ${handoff}: all five sections, outcome, tests and leg: ${legNo}.`,
+    'Record decisions, workarounds and questions as files, as the guide says under Records you keep.',
+    `Before you stop, rewrite ${handoff}: every section, outcome, tests and leg: ${legNo}.`,
   );
   if (input.commitPerTask) {
     lines.push(
@@ -151,6 +175,102 @@ ${input.request.trim()}
 Answer with only the JSON below, filling in "add" and leaving the other lists empty. No prose before or after it.
 
 ${RELAY_PROPOSAL_SHAPE}`;
+}
+
+/** The JSON a plan-mode planner answers with: the plan, its milestones, risks, questions and parts. */
+export const PLAN_PROPOSAL_SHAPE = `{
+  "summary": "one or two sentences on how you broke the job up",
+  "plan": {
+    "title": "The job in a few words",
+    "goal": "What is true when the whole job is done",
+    "definitionOfDone": ["A check that holds for every part, such as: tests pass"],
+    "outOfScope": "What this plan leaves out"
+  },
+  "milestones": [
+    {
+      "id": "M001",
+      "title": "A stage that can be shown to someone",
+      "goal": "What it delivers",
+      "exitCriteria": ["One checkable criterion per entry"]
+    }
+  ],
+  "risks": [
+    { "title": "Short name", "likelihood": "medium", "impact": "high", "risk": "What could go wrong", "mitigation": "What lowers it" }
+  ],
+  "questions": [{ "title": "Short question", "question": "What the user must decide, with the options" }],
+  "add": [
+    {
+      "id": "T014",
+      "title": "Short imperative title",
+      "milestone": "M001",
+      "priority": "p1",
+      "size": "m",
+      "depends": ["T013"],
+      "specs": ["docs/epics/01-example.md"],
+      "goal": "What the part achieves",
+      "context": "What a newcomer needs to know first",
+      "approach": "How to build it, and why this way",
+      "interfaces": "The files, modules, APIs and data it touches or adds",
+      "scope": "What it covers",
+      "outOfScope": "What it leaves for other parts",
+      "acceptance": ["One checkable criterion per entry"],
+      "testPlan": "The tests that prove it",
+      "risks": "What could go wrong in this part"
+    }
+  ],
+  "change": [],
+  "split": [],
+  "remove": []
+}`;
+
+export interface PlanRequestInput {
+  projectName: string;
+  request: string;
+  docsFolder: string;
+  firstId: string;
+  existing: { id: string; title: string; status: RelayTaskStatus }[];
+  /** Milestones the project already has, so new parts can join them. */
+  milestones: { id: string; title: string }[];
+}
+
+/**
+ * Plan mode (E121): asks a planner to break a big job into parts that each can be built, reviewed
+ * and tested on their own, with a full spec per part, and no context budget at all. Each part can
+ * then run now or later, with any agent, from its spec alone.
+ */
+export function buildPlanRequest(input: PlanRequestInput): string {
+  const board =
+    input.existing.length > 0
+      ? input.existing.map((task) => `- ${task.id} ${task.title} (${task.status})`).join('\n')
+      : '- none yet';
+  const milestones =
+    input.milestones.length > 0
+      ? input.milestones.map((milestone) => `- ${milestone.id} ${milestone.title}`).join('\n')
+      : '- none yet';
+  return `You are the project manager for "${input.projectName}". Look at the repository to understand it, but do not change any file.
+
+Break the job below into parts. Each part is one piece of work that can be built, reviewed and tested on its own, and that someone (a person or any AI agent) can pick up later from its spec alone, without this conversation. Size parts by what they deliver, not by any context or token limit: a part is as big as it needs to be, and no bigger than one reviewable change.
+
+For every part, write a spec that a newcomer can follow: its goal, the context they need, the approach and why, the files and interfaces it touches, what is in and out of scope, acceptance criteria that can each be checked, the tests that prove it, and its risks. Give it a priority (p0 most urgent to p3) and a size (xs, s, m, l or xl).
+
+Group the parts into milestones, each a stage that can be shown to someone. List the risks to the plan, and the questions only the user can answer (do not guess the answers). Write the plan's goal, its definition of done (checks every part must pass) and what is out of scope.
+
+Number new parts from ${input.firstId} upward, in the order they should be built, and new milestones from M001 or after the ones below. Use "depends" for parts that must be done first, including parts already on the board. Link the docs a part implements under "specs" (paths relative to the repository; the files live in ${tasksFolderRelPath(input.docsFolder)}/).
+
+Parts already on the board:
+${board}
+
+Milestones already in the plan:
+${milestones}
+
+The job:
+"""
+${input.request.trim()}
+"""
+
+Answer with only the JSON below, filling in every list that applies. No prose before or after it.
+
+${PLAN_PROPOSAL_SHAPE}`;
 }
 
 export interface ReviseInput {
@@ -312,8 +432,20 @@ export function blueprintRelaySection(
   docsFolder: string,
   budget: number,
   keepRolling = false,
+  mode: 'fit' | 'plan' = 'fit',
 ): string {
   const tasks = `${tasksFolderRelPath(docsFolder)}/`;
+  if (mode === 'plan') {
+    return `Write the backlog as task files in \`${tasks}\`; there is no separate backlog file. Each task is one part of the plan that can be built, reviewed and tested on its own, sized by what it delivers. There is no context budget: a part can run now or later, with any AI agent, from its spec alone.
+
+Runova has put the format in \`${guideRelPath(docsFolder)}\`. Read it and follow it exactly:
+- one file per task, named like \`T001-short-slug.md\`, numbered in delivery order from T001;
+- YAML front matter with \`id\`, \`title\`, \`status: todo\`, \`epic\`, \`order\`, \`depends\`, \`priority\` (p0 to p3), \`size\` (xs, s, m, l or xl), \`milestone\` and \`specs\`, and no estimate or budget;
+- the sections Goal, Context, Approach, Interfaces and files, Scope, Out of scope, Acceptance criteria (one checkbox each), Test plan and Risks, written so a newcomer can build the part without asking;
+- \`depends\` lists only the tasks that must be done first, \`milestone\` names the milestone file it belongs to, and \`specs\` links the epic.
+
+Link each epic to its task files. Do not write any handoff or journal files; each session writes its own handoff and Runova keeps the journals.`;
+  }
   const ceiling = formatTokenCount(Math.round(budget * TIGHT_ESTIMATE_SHARE));
   const sessions = keepRolling
     ? `each in fresh AI coding sessions of up to ${formatTokenCount(budget)} tokens of context. A task that needs more carries on in a new session from its handoff, so keep a piece of work whole rather than split it into parts that can not be tested on their own.`

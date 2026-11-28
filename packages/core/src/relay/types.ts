@@ -18,7 +18,23 @@ export type RelayOutcome = (typeof RELAY_OUTCOMES)[number];
 export const RELAY_TEST_RESULTS = ['passed', 'failed', 'not-run'] as const;
 export type RelayTestResult = (typeof RELAY_TEST_RESULTS)[number];
 
-export type HandoffSectionKey = 'purpose' | 'done' | 'decisions' | 'rejected' | 'next';
+export type HandoffSectionKey =
+  | 'purpose'
+  | 'done'
+  | 'decisions'
+  | 'tests'
+  | 'workarounds'
+  | 'rejected'
+  | 'questions'
+  | 'next';
+
+/** How urgent a task is, p0 first. Optional: a task without one sorts after those with one. */
+export const RELAY_PRIORITIES = ['p0', 'p1', 'p2', 'p3'] as const;
+export type RelayPriority = (typeof RELAY_PRIORITIES)[number];
+
+/** A rough size for planning, used in plan mode where context budgets do not apply. */
+export const RELAY_SIZES = ['xs', 's', 'm', 'l', 'xl'] as const;
+export type RelaySize = (typeof RELAY_SIZES)[number];
 
 /** Something in a file that was read past rather than trusted. Shown on the card. */
 export interface RelayIssue {
@@ -40,6 +56,22 @@ export interface RelayTask {
   budget: number | null;
   /** The docs this task implements, relative to the project. */
   specs: string[];
+  priority: RelayPriority | null;
+  size: RelaySize | null;
+  /** The milestone (M###) the task belongs to. */
+  milestone: string | null;
+  labels: string[];
+  /** The CLI the task should run with, such as `codex-cli`. Null means the relay's choice. */
+  agent: string | null;
+  /** A date the task is due, as written (`2026-12-01`). */
+  due: string | null;
+  /** How many times the task has been started over, from 1. A redo raises it. */
+  attempt: number | null;
+  /** A redo that keeps what was learned: the earlier attempt this one reads first. */
+  learnFrom: number | null;
+  /** When the first session started and when the task was done, written by Runova. */
+  started: string | null;
+  finished: string | null;
   /** File name inside the tasks folder. */
   file: string;
   /** Everything after the front matter. */
@@ -59,10 +91,22 @@ export interface RelayTaskDraft {
   estimate?: number | null;
   budget?: number | null;
   specs?: string[];
+  priority?: RelayPriority | null;
+  size?: RelaySize | null;
+  milestone?: string | null;
+  labels?: string[];
+  agent?: string | null;
+  due?: string | null;
   goal?: string;
+  /** Plan mode writes a fuller spec: background, approach and the files and interfaces touched. */
+  context?: string;
+  approach?: string;
+  interfaces?: string;
   scope?: string;
+  outOfScope?: string;
   acceptance?: string[];
   testPlan?: string;
+  risks?: string;
 }
 
 export interface RelayHandoff {
@@ -72,7 +116,11 @@ export interface RelayHandoff {
   leg: number | null;
   updated: string | null;
   sections: Record<HandoffSectionKey, string>;
-  /** Sections that are absent or empty, in template order. */
+  /**
+   * Sections that need filling in, in template order: the first five when absent or empty, and
+   * Tests run, Workarounds and Open questions when their heading is there but empty. A handoff
+   * written before those three existed has no heading for them and is not asked for them.
+   */
   missingSections: HandoffSectionKey[];
   issues: RelayIssue[];
 }
