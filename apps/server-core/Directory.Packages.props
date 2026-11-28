@@ -43,7 +43,7 @@
     <PackageVersion Include="FluentFTP" Version="55.1.0" />
     <PackageVersion Include="SSH.NET" Version="2026.0.1" />
     <!-- A Telegram user account over MTProto (Wiz0u, MIT), for backups sent in parts. -->
-    <PackageVersion Include="WTelegramClient" Version="4.4.11" />
+    <PackageVersion Include="WTelegramClient" Version="4.4.12" />
   </ItemGroup>
   <ItemGroup Label="Error reporting">
     <!-- Error reporting (E29): the core sends its warnings and errors to a Sentry project as OpenTelemetry

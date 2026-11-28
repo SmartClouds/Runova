@@ -641,7 +641,7 @@
           "System.IO.Hashing": "[11.0.0, )",
           "Tapper.Attributes": "[1.15.1, )",
           "TypedSignalR.Client.TypeScript.Attributes": "[1.18.0, )",
-          "WTelegramClient": "[4.4.11, )"
+          "WTelegramClient": "[4.4.12, )"
         }
       },
       "Cronos": {
@@ -808,9 +808,9 @@
       },
       "WTelegramClient": {
         "type": "CentralTransitive",
-        "requested": "[4.4.11, )",
-        "resolved": "4.4.11",
-        "contentHash": "SVfz436xnZ+H0diNlnUZL1+rp3KMWF8EfPlBsb5Sm7UEjvZYi+LG0nkzmCqNbPTbY0g2It+vJOgzajhLKt55uA=="
+        "requested": "[4.4.12, )",
+        "resolved": "4.4.12",
+        "contentHash": "oyix/JCi7YQb0i2SHjpOhPdR/viPjzpAWi0jcTxdzXrWPY2yRPOvYUaXUvh1miLb5wEfhFMUr64zENJEuIbFnw=="
       }
     }
   }
