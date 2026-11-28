@@ -60,7 +60,7 @@ final class TasksTests: XCTestCase {
     }
 
     private func onTasks(_ tasks: TasksScreen) -> AppView {
-        appView(connection: connected, projects: [project], selected: "p1", tasks: tasks)
+        fixtureView(connection: connected, projects: [project], selected: "p1", tasks: tasks)
     }
 
     func testOverviewSnapshot() throws {

@@ -5,7 +5,8 @@ import type {
   PackageManagerSection,
   PackageUpdateRequest,
 } from '../../../shared/apiTypes';
-import { listProjectPackages, updateProjectPackages } from '../../ipc/packageManagers';
+import { updateProjectPackages } from '../../ipc/packageManagers';
+import { listProjectPackages } from '../../packageManagers/projectPackages';
 import { defineTool, type ToolContext } from '../registry';
 import { plural, projectIdArg, projectIdOf } from './shared';
 

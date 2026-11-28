@@ -15,9 +15,9 @@ import type {
 import { IPC } from '../../shared/ipcChannels';
 import { getDependencyAlerts } from '../account/live';
 import { getDevSetupService } from '../devSetup/runtime';
-import { PACKAGE_MANAGER_ADAPTERS, scanProjectPackages } from '../packageManagers';
+import { PACKAGE_MANAGER_ADAPTERS } from '../packageManagers';
+import { listProjectPackages, projectFolderPath } from '../packageManagers/projectPackages';
 import type { RuntimeUpdateDeps } from '../packageManagers/runtimeUpdate';
-import { findProjectScope } from '../worktrees/resolve';
 import { sendToContents } from './send';
 
 /**
@@ -41,12 +41,6 @@ const NAME_PATTERNS: Record<PackageManagerEcosystem, RegExp> = {
 };
 /** Semver plus NuGet's four-part and pre-release/build forms. */
 const VERSION_PATTERN = /^[A-Za-z0-9][A-Za-z0-9.+-]*$/;
-
-async function getProjectPath(projectId: string): Promise<string> {
-  const project = await findProjectScope(projectId);
-  if (!project) throw new Error(`Project ${projectId} not found`);
-  return project.folderPath;
-}
 
 function isInside(candidate: string, root: string): boolean {
   const resolvedRoot = resolve(root);
@@ -145,19 +139,13 @@ const runtimeUpdateDeps: RuntimeUpdateDeps = {
   },
 };
 
-/** A project's packages and runtime targets, as the Packages tab lists them. */
-export async function listProjectPackages(projectId: string): Promise<PackageScanResult> {
-  const folderPath = await getProjectPath(projectId);
-  return { projectId, sections: await scanProjectPackages(folderPath) };
-}
-
 /** Updates packages in a project after checking each request against what the list could produce. */
 export async function updateProjectPackages(
   projectId: string,
   updates: PackageUpdateRequest[],
   onProgress: (progress: PackageUpdateProgress) => void = () => undefined,
 ): Promise<PackageUpdateResult> {
-  const folderPath = await getProjectPath(projectId);
+  const folderPath = await projectFolderPath(projectId);
 
   // Refuse the whole batch rather than updating some of it: a request
   // carrying anything invalid did not come from the package list.
@@ -204,7 +192,7 @@ export function registerPackageManagerHandlers(): void {
       projectId: string,
       request: RuntimeUpdateRequest,
     ): Promise<RuntimeUpdateResult> => {
-      const folderPath = await getProjectPath(projectId);
+      const folderPath = await projectFolderPath(projectId);
       const problem = rejectUnsafeRuntimeUpdate(request, folderPath);
       if (problem) return { ok: false, message: problem };
       const adapter = PACKAGE_MANAGER_ADAPTERS.find((a) => a.ecosystem === request.ecosystem);

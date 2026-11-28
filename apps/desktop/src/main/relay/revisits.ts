@@ -1,5 +1,5 @@
 import { type RelayKnownPackage, type RelayRevisit, workaroundRevisit } from '@runova/core';
-import { listProjectPackages } from '../ipc/packageManagers';
+import { listProjectPackages } from '../packageManagers/projectPackages';
 import { readItems } from './planFiles';
 import type { RelayFolder } from './taskFiles';
 

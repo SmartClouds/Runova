@@ -139,6 +139,16 @@ fn unlock_message(reason: Option<&str>, retry_after_ms: u64) -> String {
     }
 }
 
+/// What a locked vault must not show: the list, the open entry, a prompt and a revealed value.
+fn hide_locked(vault: &mut VaultScreen) {
+    if let Some(mut secret) = vault.revealed.take() {
+        secret.value.zeroize();
+    }
+    vault.entries.clear();
+    vault.open_entry = None;
+    vault.biometric = None;
+}
+
 pub(crate) struct PendingReveal {
     field: String,
     custom: bool,
@@ -165,6 +175,9 @@ impl Runner {
                         task: Box::new(Runner::load_vault_list_once),
                     });
                 } else {
+                    // Hidden in the same change as the state: a view published before the task
+                    // below runs must not show a locked vault with its list or a revealed value.
+                    hide_locked(&mut view.vault);
                     let _ = done.send(crate::engine::Done::Run {
                         attempt,
                         task: Box::new(Runner::vault_is_locked),
@@ -208,9 +221,7 @@ impl Runner {
 
     fn vault_is_locked(&mut self) {
         self.forget_secret();
-        self.view.vault.entries.clear();
-        self.view.vault.open_entry = None;
-        self.view.vault.biometric = None;
+        hide_locked(&mut self.view.vault);
         self.pending_reveal = None;
     }
 
