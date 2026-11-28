@@ -291,7 +291,8 @@ func fixtureView(
     send: SendScreen = noSends,
     receive: ReceiveScreen = noReceives,
     accounts: AccountsView = noAccounts,
-    demo: Bool = false
+    demo: Bool = false,
+    tasks: TasksScreen = noTasks
 ) -> AppView {
     AppView(
         auth: auth, hubConnected: true, systems: systems, systemsLoading: false, connection: connection,
@@ -303,8 +304,13 @@ func fixtureView(
         busy: false, notice: notice, confirm: confirm, error: error, showIntro: showIntro, appVersion: appVersion, studio: studio, gitTools: gitTools, autoFix: autoFix, prompts: prompts, studioTools: studioTools, gitMore: gitMore, encryption: encryption, qrSignIn: qrSignIn,
         passkeySignIn: passkeySignIn, providerSignIn: providerSignIn, continueInBrowser: continueInBrowser,
         lock: lock, passcode: passcode, recoveryPhrases: recoveryPhrases, send: send, receive: receive,
-        accounts: accounts, demo: demo)
+        accounts: accounts, demo: demo, tasks: tasks)
 }
+
+/// The Tasks section with nothing loaded (E124).
+let noTasks = TasksScreen(
+    overview: nil, tasks: [], loading: false, openTask: nil, detail: nil, recordsKind: nil, records: [],
+    split: TaskSplitView(running: false, planOnly: false, summary: nil, entries: [], extras: nil, error: nil))
 
 /// Nothing sent to the phone, and it takes files once it knows where (E114).
 let noReceives = ReceiveScreen(

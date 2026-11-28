@@ -75,6 +75,7 @@ describe('the method table', () => {
       'studio',
       'control',
       'files',
+      'tasks',
     ]);
     const risks = new Set(['read', 'write', 'danger']);
 

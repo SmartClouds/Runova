@@ -137,6 +137,8 @@ pub enum Section {
     Notifications,
     Studio,
     Prompts,
+    /// The plan and its tasks (E124).
+    Tasks,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
@@ -1476,6 +1478,8 @@ pub struct AppView {
     pub accounts: AccountsView,
     /// The account in use is the demo (E119): made-up data, and nothing done is kept.
     pub demo: bool,
+    /// The plan and its tasks (E124).
+    pub tasks: TasksScreen,
 }
 
 impl AppView {
@@ -1529,6 +1533,7 @@ impl AppView {
             receive: ReceiveScreen::default(),
             accounts: AccountsView::default(),
             demo: false,
+            tasks: TasksScreen::default(),
         }
     }
 }
@@ -1538,6 +1543,7 @@ pub use crate::cloudflare_view::*;
 pub use crate::receive_view::*;
 pub use crate::recovery_phrases_view::*;
 pub use crate::send_view::*;
+pub use crate::tasks_view::*;
 pub use crate::traffic_view::*;
 
 #[uniffi::export(with_foreign)]

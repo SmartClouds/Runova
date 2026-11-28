@@ -83,6 +83,7 @@ val DeviceTabs = listOf(
 private val MoreSections = listOf(
     TabItem("studio", "Studio", RunovaIcons.Studio),
     TabItem("prompts", "Prompt Builder", RunovaIcons.Sparkles),
+    TabItem("tasks", "Tasks", RunovaIcons.DoneAll),
     TabItem("vault", "Vault", RunovaIcons.Vault),
     TabItem("deploy", "Deploy", RunovaIcons.Deploy),
     TabItem("cloudflare", "Cloudflare", RunovaIcons.Cloud),
@@ -138,6 +139,7 @@ fun DeviceShell(
         section == "notifications" -> Section.NOTIFICATIONS
         section == "studio" -> Section.STUDIO
         section == "prompts" -> Section.PROMPTS
+        section == "tasks" -> Section.TASKS
         else -> null
     }
     DisposableEffect(onShow) {
@@ -155,6 +157,7 @@ fun DeviceShell(
         DeployOverlay(view, intents.deploy) ||
         (section == "cloudflare" && CloudflareOverlay(view, intents.cloudflare)) ||
         (section == "studio" && StudioOverlay(view, intents.studio)) ||
+        (section == "tasks" && TasksOverlay(view, intents.tasks)) ||
         (section == "monitoring" && MonitorOverlay(view, intents.monitoring)) ||
         PipelineOverlay(view, intents.pipelines)
     ) {
@@ -179,6 +182,10 @@ fun DeviceShell(
                 "cloudflare" -> CloudflareTab(view, intents.cloudflare)
                 "studio" -> StudioTab(view, intents.studio)
                 "prompts" -> PromptsTab(view, intents.prompts)
+                "tasks" -> Column(Modifier.fillMaxSize()) {
+                    Box(Modifier.weight(1f)) { TasksTab(view, intents.tasks) }
+                    view.error?.let { ErrorLine(it) }
+                }
                 "monitoring" -> MonitoringTab(view, intents.monitoring)
                 "pipelines" -> Column(Modifier.fillMaxSize()) {
                     Box(Modifier.weight(1f)) { PipelinesTab(view, intents.pipelines) }

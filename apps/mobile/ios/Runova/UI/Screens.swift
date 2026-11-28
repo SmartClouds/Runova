@@ -47,6 +47,7 @@ struct AppIntents {
     var remote = RemoteIntents()
     var studio = StudioIntents()
     var prompts = PromptIntents()
+    var tasks = TaskIntents()
     var lock = LockIntents()
     var passcode = PasscodeIntents()
     var phrases = PhraseIntents()

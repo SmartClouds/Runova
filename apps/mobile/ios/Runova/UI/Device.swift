@@ -12,6 +12,7 @@ let deviceTabs = [
 private let moreSections = [
     TabItem(id: "studio", title: "Studio", icon: RunovaIcons.studio),
     TabItem(id: "prompts", title: "Prompt Builder", icon: RunovaIcons.sparkles),
+    TabItem(id: "tasks", title: "Tasks", icon: RunovaIcons.doneAll),
     TabItem(id: "vault", title: "Vault", icon: RunovaIcons.vault),
     TabItem(id: "deploy", title: "Deploy", icon: RunovaIcons.deploy),
     TabItem(id: "cloudflare", title: "Cloudflare", icon: RunovaIcons.cloud),
@@ -67,6 +68,7 @@ struct DeviceShell: View {
         case "notifications": return .notifications
         case "studio": return .studio
         case "prompts": return .prompts
+        case "tasks": return .tasks
         default: return nil
         }
     }
@@ -84,6 +86,8 @@ struct DeviceShell: View {
                 StudioVideoScreen(
                     video: video, busy: view.busy, error: view.error, notice: view.notice, tools: view.studioTools,
                     intents: intents.studio)
+            } else if section == "tasks", let detail = view.tasks.detail {
+                TaskDetailScreen(detail: detail, busy: view.busy, intents: intents.tasks)
             } else if let pr = view.gitMore.pr {
                 PrScreen(pr: pr, intents: intents.git)
             } else if let tags = view.gitTools.tags {
@@ -140,6 +144,12 @@ struct DeviceShell: View {
                             case "cloudflare": CloudflareTabView(view: view, intents: intents.cloudflare)
                             case "studio": StudioTab(view: view, intents: intents.studio)
                             case "prompts": PromptsTab(view: view, intents: intents.prompts)
+                            case "tasks":
+                                VStack(alignment: .leading, spacing: 0) {
+                                    TasksTab(view: view, intents: intents.tasks)
+                                        .frame(maxHeight: .infinity, alignment: .top)
+                                    if let error = view.error { ErrorLine(message: error) }
+                                }
                             case "monitoring": MonitoringTab(view: view, intents: intents.monitoring)
                             case "pipelines":
                                 VStack(alignment: .leading, spacing: 0) {

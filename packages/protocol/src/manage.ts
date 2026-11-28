@@ -18,7 +18,8 @@ export type ManageScope =
   | 'ops'
   | 'studio'
   | 'control'
-  | 'files';
+  | 'files'
+  | 'tasks';
 
 /** `read` changes nothing, `write` changes something, `danger` is hard to undo. */
 export type ManageRisk = 'read' | 'write' | 'danger';
@@ -41,9 +42,28 @@ export const MANAGE_GRANTABLE_SCOPES: readonly ManageScope[] = [
   'studio',
   'control',
   'files',
+  'tasks',
 ];
 
 export const MANAGE_METHODS: Record<string, ManageMethod> = {
+  // The plan and its tasks (E124): read and edit the plan pack, split work, redo and run it.
+  'tasks.overview': { scope: 'tasks', risk: 'read' },
+  'tasks.board': { scope: 'tasks', risk: 'read' },
+  'tasks.detail': { scope: 'tasks', risk: 'read' },
+  'tasks.items': { scope: 'tasks', risk: 'read' },
+  'tasks.create': { scope: 'tasks', risk: 'write' },
+  'tasks.update': { scope: 'tasks', risk: 'write' },
+  'tasks.setStatus': { scope: 'tasks', risk: 'write' },
+  'tasks.toggleAcceptance': { scope: 'tasks', risk: 'write' },
+  'tasks.saveBody': { scope: 'tasks', risk: 'write' },
+  'tasks.saveItem': { scope: 'tasks', risk: 'write' },
+  'tasks.split': { scope: 'tasks', risk: 'write' },
+  'tasks.cancelSplit': { scope: 'tasks', risk: 'write' },
+  'tasks.applyProposal': { scope: 'tasks', risk: 'write' },
+  'tasks.redo': { scope: 'tasks', risk: 'danger' },
+  'tasks.start': { scope: 'tasks', risk: 'danger' },
+  'tasks.pause': { scope: 'tasks', risk: 'write' },
+  'tasks.resume': { scope: 'tasks', risk: 'danger' },
   'projects.list': { scope: 'core', risk: 'read' },
   'phone.forget': { scope: 'core', risk: 'write' },
   // A phone describing itself on every connection, so it isn't an action worth an audit row.

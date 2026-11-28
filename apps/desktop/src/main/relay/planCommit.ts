@@ -89,26 +89,34 @@ export function createPlanCommitter(deps: PlanCommitterDeps) {
     if (!target) return { kind: 'skipped', reason: 'no project' };
     if (!target.enabled) return { kind: 'skipped', reason: 'turned off' };
     const git = (args: string[]) => deps.git(target.cwd, args);
-    const inside = await git(['rev-parse', '--is-inside-work-tree']).catch(() => '');
-    if (inside.trim() !== 'true') return { kind: 'skipped', reason: 'not a git repository' };
-    const head = await git(['rev-parse', '--verify', '--quiet', 'HEAD']).catch(() => '');
-    if (!head.trim()) return { kind: 'skipped', reason: 'no commits yet' };
-    for (const marker of [
+    // One process answers where the work tree is and where git keeps its in-progress markers:
+    // each git spawn costs tens of milliseconds on Windows, more on a busy machine.
+    const markers = [
       'MERGE_HEAD',
       'CHERRY_PICK_HEAD',
       'REVERT_HEAD',
       'rebase-merge',
       'rebase-apply',
-    ]) {
-      const path = (await git(['rev-parse', '--git-path', marker]).catch(() => '')).trim();
-      if (path && (await exists(isAbsolute(path) ? path : join(target.cwd, path)))) {
+    ];
+    const facts = await git([
+      'rev-parse',
+      '--is-inside-work-tree',
+      '--show-prefix',
+      ...markers.flatMap((marker) => ['--git-path', marker]),
+    ]).catch(() => '');
+    const [inside = '', prefixLine = '', ...markerPaths] = facts.replace(/\r/g, '').split('\n');
+    if (inside.trim() !== 'true') return { kind: 'skipped', reason: 'not a git repository' };
+    const head = await git(['rev-parse', '--verify', '--quiet', 'HEAD']).catch(() => '');
+    if (!head.trim()) return { kind: 'skipped', reason: 'no commits yet' };
+    for (const path of markerPaths.map((line) => line.trim()).filter(Boolean)) {
+      if (await exists(isAbsolute(path) ? path : join(target.cwd, path))) {
         return { kind: 'skipped', reason: 'a merge or rebase is in progress' };
       }
     }
 
     await refreshStatusFile(target.folder).catch(() => false);
     const tasks = tasksFolderRelPath(target.folder.docsFolder);
-    const prefix = (await git(['rev-parse', '--show-prefix']).catch(() => '')).trim();
+    const prefix = prefixLine.trim();
     const porcelain = await git([
       '--no-optional-locks',
       'status',

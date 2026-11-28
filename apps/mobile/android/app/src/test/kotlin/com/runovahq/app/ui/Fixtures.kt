@@ -5,6 +5,8 @@ import uniffi.runova_ffi.AccountsView
 import uniffi.runova_ffi.PushLabelView
 import uniffi.runova_ffi.AccountScreen
 import uniffi.runova_ffi.AppView
+import uniffi.runova_ffi.TaskSplitView
+import uniffi.runova_ffi.TasksScreen
 import uniffi.runova_ffi.AuthState
 import uniffi.runova_ffi.AutoFixSessionView
 import uniffi.runova_ffi.AutoLock
@@ -202,6 +204,7 @@ fun appView(
     receive: ReceiveScreen = noReceives,
     accounts: AccountsView = noAccounts,
     demo: Boolean = false,
+    tasks: TasksScreen = TasksScreen(null, emptyList(), false, null, null, null, emptyList(), TaskSplitView(false, false, null, emptyList(), null, null)),
 ) = AppView(
     auth,
     true,
@@ -251,4 +254,5 @@ fun appView(
     receive,
     accounts,
     demo,
+    tasks,
 )

@@ -33,6 +33,7 @@ const SCOPES: &[&str] = &[
     "studio",
     "control",
     "files",
+    "tasks",
 ];
 const SCREEN_WIDTH: u16 = 1280;
 const SCREEN_HEIGHT: u16 = 720;

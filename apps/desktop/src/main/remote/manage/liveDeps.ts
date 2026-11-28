@@ -39,6 +39,7 @@ import { liveAgents } from './liveAgents';
 import { liveCloudflare, liveCloudflareOrigin } from './liveCloudflare';
 import { liveDeploy, liveTraffic } from './liveDeploy';
 import { liveGit } from './liveGit';
+import { liveTasks } from './liveTasks';
 import type { ManageMethodDeps } from './methods';
 import { statusFeed } from './statusFeed';
 
@@ -129,6 +130,7 @@ export const liveManageDeps: Omit<ManageMethodDeps, 'forgetPhone' | 'setPhoneSea
   },
   deploy: liveDeploy,
   traffic: liveTraffic,
+  tasks: liveTasks,
   cloudflare: liveCloudflare,
   cloudflareOrigin: liveCloudflareOrigin,
   monitoring: {

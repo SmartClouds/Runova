@@ -44,6 +44,7 @@ function deps(change: Partial<ManageMethodDeps> = {}): ManageMethodDeps {
     errorTracking: {} as ManageErrorTrackingDeps,
     studio: { service: vi.fn(), onEvent: () => () => undefined, now: () => 0 } as never,
     agents: {} as never,
+    tasks: {} as never,
     ...change,
   };
 }

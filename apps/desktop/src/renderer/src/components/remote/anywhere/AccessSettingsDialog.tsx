@@ -224,6 +224,10 @@ const SCOPE_LABELS: Record<ManageScope, { label: string; description: string }> 
   studio: { label: 'Studio', description: 'Make videos: write scenes, animate and render.' },
   control: { label: 'Control the screen', description: 'See the screen and use the mouse.' },
   files: { label: 'Files', description: 'Send and receive files.' },
+  tasks: {
+    label: 'Tasks and plans',
+    description: 'Read and edit the plan, split work into tasks, and start or redo them.',
+  },
 };
 
 /** What a phone may do on this computer, always written in the same order. */

@@ -1,0 +1,312 @@
+{
+  "tasks.overview": {
+    "result": {
+      "exists": true,
+      "plan": {
+        "title": "Gift cards at checkout",
+        "mode": "plan",
+        "goal": "Shoppers pay with a gift card, in part or in full, and see what is left on it."
+      },
+      "done": 3,
+      "total": 7,
+      "counts": { "todo": 2, "inProgress": 1, "testing": 0, "done": 3, "blocked": 1 },
+      "milestones": [
+        {
+          "id": "M001",
+          "title": "Pay with a card",
+          "status": "active",
+          "target": "2026-12-12",
+          "done": 3,
+          "total": 4
+        },
+        {
+          "id": "M002",
+          "title": "Balance and history",
+          "status": "planned",
+          "target": "2027-01-09",
+          "done": 0,
+          "total": 3
+        }
+      ],
+      "needsYou": [
+        {
+          "id": "T005",
+          "title": "Split a payment between a card and a gift card",
+          "status": "blocked",
+          "statusLabel": "Blocked",
+          "priority": "p1",
+          "size": "l",
+          "milestone": "M001",
+          "labels": [],
+          "due": null,
+          "agent": null,
+          "checked": 1,
+          "total": 3
+        }
+      ],
+      "questions": [{ "id": "Q001", "title": "Can a gift card pay for shipping?" }],
+      "workarounds": 1,
+      "risks": 2,
+      "run": { "id": "relay-demo", "status": "running", "taskId": "T004" }
+    }
+  },
+  "tasks.board": {
+    "result": [
+      {
+        "id": "T001",
+        "title": "Gift card field at checkout",
+        "status": "done",
+        "statusLabel": "Done",
+        "priority": "p1",
+        "size": "s",
+        "milestone": "M001",
+        "labels": ["ui"],
+        "due": null,
+        "agent": null,
+        "checked": 3,
+        "total": 3
+      },
+      {
+        "id": "T002",
+        "title": "Check a code against the payment provider",
+        "status": "done",
+        "statusLabel": "Done",
+        "priority": "p0",
+        "size": "m",
+        "milestone": "M001",
+        "labels": ["api"],
+        "due": null,
+        "agent": null,
+        "checked": 4,
+        "total": 4
+      },
+      {
+        "id": "T003",
+        "title": "Strip spaces and dashes from pasted codes",
+        "status": "done",
+        "statusLabel": "Done",
+        "priority": "p2",
+        "size": "xs",
+        "milestone": "M001",
+        "labels": [],
+        "due": null,
+        "agent": null,
+        "checked": 3,
+        "total": 3
+      },
+      {
+        "id": "T004",
+        "title": "Show the new total after a card is applied",
+        "status": "in-progress",
+        "statusLabel": "In progress",
+        "priority": "p1",
+        "size": "m",
+        "milestone": "M001",
+        "labels": ["ui"],
+        "due": "2026-12-05",
+        "agent": "claude-code",
+        "checked": 1,
+        "total": 3
+      },
+      {
+        "id": "T005",
+        "title": "Split a payment between a card and a gift card",
+        "status": "blocked",
+        "statusLabel": "Blocked",
+        "priority": "p1",
+        "size": "l",
+        "milestone": "M001",
+        "labels": [],
+        "due": null,
+        "agent": null,
+        "checked": 1,
+        "total": 3
+      },
+      {
+        "id": "T006",
+        "title": "Balance page",
+        "status": "todo",
+        "statusLabel": "To do",
+        "priority": "p2",
+        "size": "m",
+        "milestone": "M002",
+        "labels": ["ui"],
+        "due": null,
+        "agent": null,
+        "checked": 0,
+        "total": 2
+      },
+      {
+        "id": "T007",
+        "title": "Gift card history in the account",
+        "status": "todo",
+        "statusLabel": "To do",
+        "priority": "p3",
+        "size": "m",
+        "milestone": "M002",
+        "labels": [],
+        "due": null,
+        "agent": null,
+        "checked": 0,
+        "total": 3
+      }
+    ]
+  },
+  "tasks.detail": {
+    "result": {
+      "task": {
+        "id": "T004",
+        "title": "Show the new total after a card is applied",
+        "status": "in-progress",
+        "statusLabel": "In progress",
+        "priority": "p1",
+        "size": "m",
+        "milestone": "M001",
+        "labels": ["ui"],
+        "due": "2026-12-05",
+        "agent": "claude-code",
+        "checked": 1,
+        "total": 3
+      },
+      "depends": ["T002"],
+      "attempt": null,
+      "sections": [
+        {
+          "heading": "Goal",
+          "text": "After a gift card is applied, the order summary shows what the card paid and what is left to pay, without a reload."
+        },
+        {
+          "heading": "Approach",
+          "text": "Return the new total from the apply call and update the summary store from it."
+        }
+      ],
+      "acceptance": [
+        { "text": "The summary shows the gift card line and the new total", "checked": true },
+        { "text": "Removing the card puts the old total back", "checked": false },
+        { "text": "A card worth more than the order leaves 0.00 to pay", "checked": false }
+      ],
+      "body": "## Goal\n\nAfter a gift card is applied, the order summary shows what the card paid and what is left to pay, without a reload.\n\n## Acceptance criteria\n\n- [x] The summary shows the gift card line and the new total\n- [ ] Removing the card puts the old total back\n- [ ] A card worth more than the order leaves 0.00 to pay\n",
+      "handoff": {
+        "outcome": "continue",
+        "tests": "passed",
+        "leg": 1,
+        "sections": [
+          {
+            "heading": "done",
+            "text": "The summary shows the gift card line, in OrderSummary.tsx, with tests."
+          },
+          { "heading": "next", "text": "Put the old total back when the card is removed." }
+        ]
+      },
+      "journal": [
+        {
+          "heading": "2026-11-28 09:30 session 1",
+          "lines": [
+            "Agent: claude-code, opus, high",
+            "Result: continue",
+            "Tests: passed",
+            "Time: 34 min"
+          ]
+        }
+      ]
+    }
+  },
+  "tasks.items": {
+    "by": "kind",
+    "result": [],
+    "cases": {
+      "question": {
+        "result": [
+          {
+            "id": "Q001",
+            "title": "Can a gift card pay for shipping?",
+            "status": "open",
+            "statuses": ["open", "answered"],
+            "details": [{ "label": "From task", "value": "T005" }],
+            "sections": [
+              {
+                "heading": "Question",
+                "text": "The provider allows it, but the old checkout never did. Should it?"
+              }
+            ]
+          }
+        ]
+      },
+      "workaround": {
+        "result": [
+          {
+            "id": "W001",
+            "title": "Round totals in the browser",
+            "status": "open",
+            "statuses": ["open", "fixed", "wont-fix"],
+            "details": [
+              { "label": "Waits on", "value": "@shop/money" },
+              { "label": "Fixed in", "value": "3.2.0" }
+            ],
+            "sections": [
+              {
+                "heading": "What we did",
+                "text": "Totals are rounded in the summary until the money library rounds half to even."
+              }
+            ]
+          }
+        ]
+      },
+      "decision": {
+        "result": [
+          {
+            "id": "D001",
+            "title": "Check codes on the server, never in the browser",
+            "status": "accepted",
+            "statuses": ["proposed", "accepted", "superseded"],
+            "details": [{ "label": "From task", "value": "T002" }],
+            "sections": [
+              {
+                "heading": "Decision",
+                "text": "The browser sends the code; only the server talks to the provider."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "tasks.create": { "result": { "ok": true, "message": "Added T008.", "id": "T008" } },
+  "tasks.update": { "result": { "ok": true, "message": "Saved." } },
+  "tasks.setStatus": { "result": { "ok": true, "message": "Moved." } },
+  "tasks.toggleAcceptance": { "result": { "ok": true, "message": "Ticked." } },
+  "tasks.saveBody": { "result": { "ok": true, "message": "Saved the spec." } },
+  "tasks.saveItem": { "result": { "ok": true, "message": "Saved.", "id": "Q001" } },
+  "tasks.split": {
+    "result": {
+      "ok": true,
+      "error": null,
+      "summary": "Two parts: the gift card balance page and its history.",
+      "entries": [
+        { "kind": "add", "id": "T008", "title": "Balance lookup endpoint" },
+        { "kind": "add", "id": "T009", "title": "Balance page with recent use" }
+      ],
+      "extras": "Also writes 1 milestone.",
+      "proposal": {
+        "summary": "Two parts.",
+        "add": [
+          { "title": "Balance lookup endpoint" },
+          { "title": "Balance page with recent use" }
+        ],
+        "change": [],
+        "split": [],
+        "remove": []
+      }
+    }
+  },
+  "tasks.cancelSplit": { "result": { "ok": true, "message": "Stopped planning." } },
+  "tasks.applyProposal": {
+    "result": { "ok": true, "message": "Added 2 tasks to the board.", "warnings": [] }
+  },
+  "tasks.redo": { "result": { "ok": true, "message": "T005 started again." } },
+  "tasks.start": { "result": { "ok": true, "message": "The relay started." } },
+  "tasks.pause": {
+    "result": { "ok": true, "message": "The relay pauses after the session it is on." }
+  },
+  "tasks.resume": { "result": { "ok": true, "message": "The relay goes on." } }
+}

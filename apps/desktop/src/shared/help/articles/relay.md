@@ -100,6 +100,10 @@ Each change to `docs/tasks/` gets a commit of its own, a few seconds after the l
 
 Pushing stays yours. The board shows how many commits are not pushed yet and how many are waiting on the remote, with **Push** and **Pull**; the refresh button checks the remote. If two computers each added a task with the same id, the Overview lists it and **Give ... a new id** renumbers one of the files.
 
+## On your phone
+
+With the **Tasks and plans** permission, the phone app's **Tasks** section (under **More**) shows the same plan: an overview with progress by milestone, what needs you and the run, with **Pause**, **Go on** or **Run the tasks**; every task with its spec, acceptance criteria, handoff and journal; the records; and **Split** to plan a request into tasks or a specced plan on this computer. Changes made on the phone are written and committed by this computer, as edits made here are.
+
 ## Redo with another agent
 
 Open a task and click **Redo** to run it again from its spec, with another agent if you like. Its handoff and journal so far move to `docs/tasks/handoffs/archive/T001-attempt-1.md`, nothing is lost, and the task goes back to To do as attempt 2. With **Learn from the earlier attempt** on, the new session reads that archive first; turn it off for a clean second opinion.

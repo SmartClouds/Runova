@@ -17,6 +17,7 @@ import {
 import { ManageError, type ManageMethods } from './session';
 import { type ManageStatusDeps, statusMethods } from './statusMethods';
 import { type ManageStudioDeps, studioDownloads, studioMethods } from './studioMethods';
+import { type ManageTaskDeps, taskMethods } from './taskMethods';
 import { type ManageTrafficDeps, trafficMethods } from './trafficMethods';
 import { type ManageVaultDeps, vaultMethods } from './vaultMethods';
 
@@ -55,6 +56,8 @@ export interface ManageMethodDeps {
   errorTracking: ManageErrorTrackingDeps;
   studio: ManageStudioDeps;
   agents: ManageAgentDeps;
+  /** The plan and its tasks (E124). */
+  tasks: ManageTaskDeps;
 }
 
 /** Far past anything typed or pasted on a phone. */
@@ -128,6 +131,7 @@ export function createManageMethods(deps: ManageMethodDeps): ManageMethods {
       ...studioMethods(deps.studio),
       ...downloads.calls,
       ...agentMethods(deps.agents),
+      ...taskMethods(deps.tasks),
     },
     streams: {
       'terminals.follow': async (params, sink) => {

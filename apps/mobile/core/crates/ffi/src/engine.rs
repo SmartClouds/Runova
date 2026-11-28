@@ -351,6 +351,7 @@ pub(crate) struct Runner {
     pub(crate) provider_generation: u64,
     pub(crate) cloudflare: crate::cloudflare::CloudflareState,
     pub(crate) traffic: crate::traffic::TrafficState,
+    pub(crate) tasks: crate::tasks::TasksState,
     pub(crate) app_lock: crate::app_lock::LockState,
     pub(crate) pending_phrase: Option<crate::recovery_phrases::PendingPhraseReveal>,
     /// Files on their way to computers (E113).
@@ -445,6 +446,7 @@ impl Runner {
             provider_generation: 0,
             cloudflare: Default::default(),
             traffic: Default::default(),
+            tasks: Default::default(),
             app_lock: Default::default(),
             pending_phrase: None,
             send: Default::default(),
@@ -594,6 +596,7 @@ impl Runner {
             Some(Section::Notifications) => self.refresh_notifications(),
             Some(Section::Studio) => self.refresh_studio(),
             Some(Section::Prompts) => self.refresh_prompts(),
+            Some(Section::Tasks) => self.refresh_tasks(),
             None => {}
         }
     }
@@ -654,6 +657,8 @@ impl Runner {
         self.view.studio = Default::default();
         self.view.auto_fix.clear();
         self.view.prompts = Default::default();
+        self.view.tasks = Default::default();
+        self.tasks = Default::default();
         self.view.studio_tools = Default::default();
         self.view.git_more = Default::default();
         self.view.status = StatusScreen::default();

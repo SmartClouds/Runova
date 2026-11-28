@@ -2,7 +2,8 @@
 //! `{"result": value}`, `{"error": {"code", "message"}}`, or for a stream
 //! `{"events": [...], "bytes": ["text", ...], "end": true}`. A stream with `"end": false` stays
 //! open, as a terminal does. An answer that depends on what was asked for names the parameter in
-//! `"by"` and keeps, in `"cases"`, the fields that differ for each value, laid over `"result"`.
+//! `"by"` and keeps, in `"cases"`, the fields that differ for each value, laid over `"result"`. A
+//! list answer has no fields, so its case holds the whole list for that value under `"result"`.
 
 use serde::Deserialize;
 use serde_json::{Map, Value};
@@ -21,6 +22,7 @@ const FILES: &[(&str, &str)] = &[
     ("cloudflare", include_str!("answers/cloudflare.json")),
     ("deploy", include_str!("answers/deploy.json")),
     ("ops", include_str!("answers/ops.json")),
+    ("tasks", include_str!("answers/tasks.json")),
 ];
 
 #[derive(Debug, Clone, Deserialize)]
@@ -59,6 +61,13 @@ impl Answer {
             .as_deref()
             .and_then(|by| params?.get(by)?.as_str())
             .and_then(|value| self.cases.get(value));
+        // A list answer can not take fields, so its case gives the whole list under "result".
+        if let Some(whole) = case
+            .filter(|_| !result.is_object())
+            .and_then(|c| c.get("result"))
+        {
+            return whole.clone();
+        }
         if let (Some(case), Value::Object(fields)) = (case, &mut result) {
             for (key, value) in case {
                 fields.insert(key.clone(), value.clone());

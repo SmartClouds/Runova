@@ -28,6 +28,7 @@ What a phone may do is set per computer:
 - **Deploy and servers**, **Cloudflare**, **Monitoring and pipelines** and **Studio**.
 - **Control the screen**: see the screen and use the mouse.
 - **Files**: send and receive files.
+- **Tasks and plans**: read and edit a project's plan and tasks, split work into tasks, and start, pause or redo them.
 
 Change these later, or click **Forget** to remove the phone, in **Remote**, **Anywhere**, **Access settings**, under **Phones**. Changing what a phone may do ends its session, so it reconnects with the new limits.
 
@@ -39,6 +40,7 @@ Change these later, or click **Forget** to remove the phone, in **Remote**, **An
 - **Deploy**: servers and what runs on them, [traffic and attacks](deploy-traffic.md#on-your-phone), and Cloudflare through the tokens saved on the computer. The phone never holds a Cloudflare token.
 - **Monitoring and pipelines**: monitors and their history (cloud monitors even while the computer is off), and CI runs, including a fix with an agent.
 - **Studio**: start a video from a sentence, follow the work, ask for changes and bring the finished film to the phone.
+- **Tasks**: a project's [plan and tasks](relay.md#on-your-phone): progress by milestone, what needs you, each task's spec, criteria, handoff and journal, the decisions, workarounds, risks and questions, and splitting a request into tasks or a specced plan. Change a status, tick a criterion, answer a question, redo a task with another agent, or start and pause the relay. The files stay on the computer, which commits each change.
 - **Remote**: see and control a computer's screen.
 - **Files**: send files, photos and folders to your computers and your teammates', and receive files from your own computers. See [Send files](remote-send-files.md#send-from-your-phone).
 - **Vault**: open the computer's Vault with its passphrase. Each value you reveal needs your fingerprint or face, and Vault screens can not be captured in a screenshot.

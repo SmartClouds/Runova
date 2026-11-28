@@ -33,6 +33,8 @@ vi.mock('../cli/headlessPrompt', () => ({
   cancelHeadlessPrompt: cli.cancel,
 }));
 vi.mock('../relay/wiring', () => ({ relayWatcher: () => watcher }));
+// The real committer would run git in the temporary project after each edit; planCommit has its own tests.
+vi.mock('../relay/planCommit', () => ({ schedulePlanCommit: vi.fn() }));
 
 const userData = useTempUserData();
 // The on* channels go main to renderer; the driver tests cover what is sent on them.

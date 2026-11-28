@@ -103,6 +103,7 @@ data class AppIntents(
     val remote: RemoteIntents = RemoteIntents(),
     val studio: StudioIntents = StudioIntents(),
     val prompts: PromptIntents = PromptIntents(),
+    val tasks: TaskIntents = TaskIntents(),
     val lock: LockIntents = LockIntents(),
     val passcode: PasscodeIntents = PasscodeIntents(),
     val phrases: PhraseIntents = PhraseIntents(),

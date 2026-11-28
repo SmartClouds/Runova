@@ -3,6 +3,9 @@ package com.runovahq.app.ui
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.UriHandler
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -137,6 +140,8 @@ class IntroTest {
         val computer = ConnectionView(1, "Sam's desk", ConnectionPhase.CONNECTED, "483921", true, null)
         show(appView(connection = computer, appVersion = "1.4.2"), tab = "more")
 
+        // The list of sections is longer than the screen, so About is scrolled to first.
+        compose.onNode(hasScrollAction()).performScrollToNode(hasText("About Runova"))
         compose.onNodeWithText("About Runova").performClick()
         compose.onNodeWithText("v1.4.2").assertExists()
         compose.onNodeWithContentDescription("Close").performClick()

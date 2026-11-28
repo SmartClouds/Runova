@@ -18,7 +18,8 @@ of the repo, and another computer or the phone sees it after a pull.
   GitHub and in the log. It is rewritten only when its content changes.
 - **Behind origin.** The Tasks tab says when the branch is behind its upstream and offers Pull.
 - **Duplicate ids.** Two computers can each add T030. After a pull the app finds duplicate T###,
-  M###, D###, W###, R### or Q### ids and offers to renumber one, fixing `depends` and references.
+  M###, D###, W###, R### or Q### ids and offers to give one file the next free id. What named the
+  old id is left for a person to point at the right file, since only they know which one it meant.
 
 ## Tasks
 
@@ -31,7 +32,7 @@ of the repo, and another computer or the phone sees it after a pull.
 
 - AC1 Changing a task's status in the app makes one commit with only the plan folder in it, while
   another staged file stays staged.
-- AC2 A duplicate id after a pull is found and fixed with its references.
+- AC2 A duplicate id after a pull is found, and one of the two files gets the next free id.
 
 ## Tests
 

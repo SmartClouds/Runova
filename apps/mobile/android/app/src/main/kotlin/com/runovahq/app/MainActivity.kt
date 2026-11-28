@@ -66,6 +66,7 @@ import com.runovahq.app.ui.RemoteIntents
 import com.runovahq.app.ui.StatusIntents
 import com.runovahq.app.ui.PromptIntents
 import com.runovahq.app.ui.StudioIntents
+import com.runovahq.app.ui.TaskIntents
 import com.runovahq.app.ui.VaultIntents
 import com.runovahq.app.ui.StartingScreen
 import uniffi.runova_ffi.AppLifecycle
@@ -433,6 +434,26 @@ class MainActivity : FragmentActivity(), ViewListener {
                 deleteTemplate = { engine.promptsDeleteTemplate(it) },
                 schedule = { engine.promptsSchedule(it) },
                 cancelScheduled = { engine.promptsCancelScheduled(it) },
+            ),
+            tasks = TaskIntents(
+                open = { engine.tasksOpenTask(it) },
+                close = { engine.tasksCloseTask() },
+                setStatus = { id, status -> engine.tasksSetStatus(id, status) },
+                toggle = { id, index, checked -> engine.tasksToggle(id, index, checked) },
+                create = { title, priority -> engine.tasksCreate(title, priority) },
+                update = { id, edit -> engine.tasksUpdate(id, edit) },
+                showRecords = { engine.tasksShowRecords(it) },
+                setRecordStatus = { kind, id, status -> engine.tasksSetRecordStatus(kind, id, status) },
+                answer = { id, answer -> engine.tasksAnswerQuestion(id, answer) },
+                addRecord = { kind, title, text -> engine.tasksAddRecord(kind, title, text) },
+                redo = { id, agent, keep -> engine.tasksRedo(id, agent, keep) },
+                split = { request, planOnly -> engine.tasksSplit(request, planOnly) },
+                cancelSplit = { engine.tasksCancelSplit() },
+                addSplit = { engine.tasksAddSplit() },
+                discardSplit = { engine.tasksDiscardSplit() },
+                start = { engine.tasksStart() },
+                pause = { engine.tasksPause() },
+                resume = { engine.tasksResume() },
             ),
             studio = StudioIntents(
                 openComposer = { engine.studioOpenComposer() },

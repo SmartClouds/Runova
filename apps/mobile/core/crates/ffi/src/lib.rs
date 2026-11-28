@@ -40,6 +40,8 @@ pub(crate) mod send_view;
 pub mod status;
 pub mod studio;
 pub mod studio_tools;
+pub mod tasks;
+pub(crate) mod tasks_view;
 pub(crate) mod terminals;
 pub mod traffic;
 pub(crate) mod traffic_view;

@@ -155,11 +155,16 @@ Plan: docs/ROADMAP.md
 | E121 | Plan mode and the plan pack | Complete | see git log | Plan only splits a job into specced parts with no budget, and writes PLAN.md, milestones, risks and questions; sessions record decisions and workarounds (with the version they wait for) as files, handoffs add Tests run, Workarounds and Open questions, every session lands in the task's journal, and Redo runs a task again with another agent, learning from the archived attempt or not. The Blueprint asks for the same plan pack. PLAN.md can turn on the run options for everyone; Review each task pauses between tasks |
 | E122 | A task manager on the desktop | Complete | see git log | The board has Overview (plan, progress by milestone, what needs you, workarounds that can go, risks, recently done), Board, List (sort and filter), Roadmap and Records views. Tasks, records and PLAN.md are added and edited by hand, acceptance boxes tick in the detail, the journal shows there, and a workaround whose fix is out (by the package check) or whose date has passed is flagged with Fix with AI. Every edit touches only its own lines |
 | E123 | Plan sync through git | Complete | see git log | Each change to the plan folder is committed on its own five quiet seconds later, by pathspec, so other staged work stays out; messages name the ids added, updated and removed; STATUS.md sums up the plan; nothing happens mid-merge or in a repo with no commits, and Run settings can turn it off. The board shows commits to push and to pull with Push and Pull, and renumbers a file whose id another computer also used |
-| E124 | Tasks on the phone | Not started | | The Tasks tab on Android and iOS through a new `tasks` scope |
+| E124 | Tasks on the phone | In progress | see git log | A `tasks` scope and seventeen bridge methods bring the plan to the phone: overview with milestones and what needs you, tasks with spec, criteria, handoff and journal, records by kind, split into tasks or a specced plan, redo, and run control. Edits go through the desktop's own writers and are committed there. Desktop, Rust and Android tested; iOS written but not compiled yet |
 
 Status values: Not started, In progress, Blocked, Complete.
 
 ## Unverified criteria
+
+**E124 Tasks on the phone**
+
+- iOS (the Tasks screens) is unverified until the Mobile iOS CI job builds it.
+- Not tried end to end from a real phone against a real computer.
 
 **E119 Demo mode for the phone app**
 
