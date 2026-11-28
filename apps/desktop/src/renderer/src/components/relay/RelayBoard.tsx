@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils';
 import { useRelayBoardStore } from '@/stores/relayBoardStore';
 import { useRelayPlanDialogStore } from '@/stores/relayPlanDialogStore';
 import { PlanEditDialog } from './PlanEditDialog';
+import { PlanSyncStrip } from './PlanSyncStrip';
 import { RelayOverview, RelayRecords, RelayRoadmap, RelayTaskList } from './PlanViews';
 import { RelayLiveStrip } from './RelayLiveStrip';
 import { RelayRunSettings } from './RelayRunSettings';
@@ -384,14 +385,11 @@ export function RelayBoard({
             </button>
           ))}
         </div>
+        <div className="ml-auto">
+          <PlanSyncStrip projectId={projectId} />
+        </div>
         {board ? (
-          <Button
-            type="button"
-            size="sm"
-            variant="soft"
-            className="ml-auto"
-            onClick={() => setCreating(true)}
-          >
+          <Button type="button" size="sm" variant="soft" onClick={() => setCreating(true)}>
             <Plus /> New task
           </Button>
         ) : null}

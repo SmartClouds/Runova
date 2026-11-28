@@ -3,7 +3,7 @@ title: Relay tasks
 category: Build
 order: 15
 summary: Break work into tasks that each fit one AI session, run them one after another in fresh sessions, and carry what each session learned to the next through a handoff file.
-keywords: relay, tasks, task board, board, handoff, baton, context, context budget, 200k, session, split into tasks, split into relay tasks, revise with ai, plan first, auto mode, run relay, schedule, after a task, sdd, kanban, trello, mcp, runova_relay, finish_leg, over budget, keep handing off, run past the budget, session limit, plan mode, plan only, plan.md, milestones, decisions, workarounds, risks, questions, journal, redo, another agent, attempt, review each task, overview, list, roadmap, records, priority, milestone, new task, edit task, acceptance criteria, fix with ai
+keywords: relay, tasks, task board, board, handoff, baton, context, context budget, 200k, session, split into tasks, split into relay tasks, revise with ai, plan first, auto mode, run relay, schedule, after a task, sdd, kanban, trello, mcp, runova_relay, finish_leg, over budget, keep handing off, run past the budget, session limit, plan mode, plan only, plan.md, milestones, decisions, workarounds, risks, questions, journal, redo, another agent, attempt, review each task, overview, list, roadmap, records, priority, milestone, new task, edit task, acceptance criteria, fix with ai, commit, git history, status.md, push, pull, duplicate id, renumber
 route: /workspace
 ---
 
@@ -93,6 +93,12 @@ Everything lives in `docs/tasks/` as Markdown, so git keeps its history and anyo
 - `journal/T001.md`: Runova adds an entry each time a session on the task ends: the agent and model, the outcome, the tests, the context it used, how long it took and its commit.
 
 Each session reads the plan and the decisions and workarounds that touch its task before it starts.
+
+## The plan's history in git
+
+Each change to `docs/tasks/` gets a commit of its own, a few seconds after the last edit: a task you add or edit, a record, the plan, a finished session's handoff and journal. The commit takes only the plan folder, so anything else you have staged stays staged and out of it, and its message says what changed (`docs(tasks): add W003, update T012`). Runova also keeps `docs/tasks/STATUS.md`, a summary of where the plan stands that reads well on GitHub. Nothing is committed during a merge or a rebase, or in a repository with no commits yet. Turn **Commit plan changes** off in Run settings to commit by hand instead.
+
+Pushing stays yours. The board shows how many commits are not pushed yet and how many are waiting on the remote, with **Push** and **Pull**; the refresh button checks the remote. If two computers each added a task with the same id, the Overview lists it and **Give ... a new id** renumbers one of the files.
 
 ## Redo with another agent
 

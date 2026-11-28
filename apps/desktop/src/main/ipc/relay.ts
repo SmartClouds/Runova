@@ -25,11 +25,14 @@ import type {
   RelayTaskDetail,
 } from '../../shared/relayTypes';
 import { buildRelayBoard, projectRelayFolder, relayTaskDetail } from '../relay/board';
+import { schedulePlanCommit } from '../relay/planCommit';
 import {
   createTask,
+  duplicatesIn,
   journalEntries,
   removeItem,
   removeTask,
+  renumberFile,
   saveItem,
   savePlan,
   saveTaskBody,
@@ -215,6 +218,7 @@ function runtime() {
 
 function changed(projectId: string, reason: 'files' | 'settings'): void {
   broadcastToWindows(IPC.relay.onChanged, { projectId, reason });
+  if (reason === 'files') schedulePlanCommit(projectId);
 }
 
 /** Runs a planner and, once it answers, tells a user who has moved to another app. */
@@ -334,8 +338,12 @@ export function registerRelayHandlers(): void {
   // The plan around the tasks (E122): read it, and every edit made by hand.
   ipcMain.handle(IPC.relay.planPack, async (_event, projectId: unknown): Promise<RelayPlanPack> => {
     const { folder } = await projectRelayFolder(id.parse(projectId));
-    const [plan, items] = await Promise.all([readPlan(folder), readAllItems(folder)]);
-    return { plan, items };
+    const [plan, items, duplicates] = await Promise.all([
+      readPlan(folder),
+      readAllItems(folder),
+      duplicatesIn(folder),
+    ]);
+    return { plan, items, duplicates };
   });
   ipcMain.handle(IPC.relay.revisits, async (_event, projectId: unknown) => {
     const project = id.parse(projectId);
@@ -439,6 +447,22 @@ export function registerRelayHandlers(): void {
       const created = await taskForWorkaround(folder, itemIdSchema.parse(itemId));
       changed(project, 'files');
       return created;
+    },
+  );
+  ipcMain.handle(
+    IPC.relay.renumber,
+    async (_event, projectId: unknown, file: unknown): Promise<string> => {
+      const project = id.parse(projectId);
+      const { folder } = await projectRelayFolder(project);
+      const name = z
+        .string()
+        .regex(
+          /^(?:(?:milestones|decisions|workarounds|risks|questions)\/)?[TMDWRQ]\d{3,}[^/\\]*\.md$/,
+        )
+        .parse(file);
+      const renumbered = await renumberFile(folder, name);
+      changed(project, 'files');
+      return renumbered;
     },
   );
   ipcMain.handle(IPC.relay.redo, async (_event, input: unknown): Promise<RelayRedoResult> => {

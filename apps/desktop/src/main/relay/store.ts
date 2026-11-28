@@ -59,6 +59,7 @@ const optionsSchema = z.object({
   keepRolling: z.boolean().optional(),
   runPastBudget: z.boolean().optional(),
   reviewEachTask: z.boolean().optional(),
+  commitPlan: z.boolean().optional(),
 });
 
 const overrideSchema = z.object({

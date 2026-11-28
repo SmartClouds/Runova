@@ -261,6 +261,31 @@ describe('the plan around the tasks', () => {
     await expect(invoke(IPC.relay.updateTask, 'p1', 'T001', { status: 'done' })).rejects.toThrow();
   });
 
+  it('finds an id two files share and gives one of them the next free id', async () => {
+    await load();
+    writeFileSync(
+      join(folder, 'docs', 'tasks', 'T002-from-the-other-laptop.md'),
+      renderTaskFile({ id: 'T002', title: 'From the other laptop' }),
+    );
+    const pack = await invoke<{ duplicates: { id: string; files: string[] }[] }>(
+      IPC.relay.planPack,
+      'p1',
+    );
+    expect(pack.duplicates).toEqual([
+      { id: 'T002', files: ['T002-from-the-other-laptop.md', 'T002-search.md'] },
+    ]);
+    const renumbered = await invoke<string>(IPC.relay.renumber, 'p1', 'T002-search.md');
+    expect(renumbered).toBe('T003');
+    expect(taskText('T003-search.md')).toContain('id: T003');
+    expect(existsSync(join(folder, 'docs', 'tasks', 'T002-search.md'))).toBe(false);
+    await expect(invoke(IPC.relay.renumber, 'p1', 'T001-login.md')).rejects.toThrow(
+      /does not share/,
+    );
+    for (const hostile of ['../T001-login.md', 'decisions/../../x.md', 'C:\\T001.md', 'T001']) {
+      await expect(invoke(IPC.relay.renumber, 'p1', hostile)).rejects.toThrow();
+    }
+  });
+
   it('adds and removes tasks, and refuses to remove one others depend on', async () => {
     await load();
     const id = await invoke<string>(IPC.relay.createTask, 'p1', {

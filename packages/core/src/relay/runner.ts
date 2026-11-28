@@ -44,6 +44,8 @@ export interface RelayOptions {
   runPastBudget: boolean;
   /** Pause after every finished task, so the person looks at it before the next one starts. */
   reviewEachTask: boolean;
+  /** Commit each change to the plan folder on its own (E123). Pushing stays the person's. */
+  commitPlan: boolean;
 }
 
 export const DEFAULT_RELAY_OPTIONS: RelayOptions = {
@@ -58,6 +60,7 @@ export const DEFAULT_RELAY_OPTIONS: RelayOptions = {
   keepRolling: false,
   runPastBudget: false,
   reviewEachTask: false,
+  commitPlan: true,
 };
 
 export const RELAY_TIMING = {

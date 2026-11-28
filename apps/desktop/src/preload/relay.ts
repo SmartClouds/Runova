@@ -118,6 +118,8 @@ export function createRelay() {
       ipcRenderer.invoke(IPC.relay.removeItem, projectId, kind, itemId),
     fixWorkaround: (projectId: string, itemId: string): Promise<string> =>
       ipcRenderer.invoke(IPC.relay.fixWorkaround, projectId, itemId),
+    renumber: (projectId: string, file: string): Promise<string> =>
+      ipcRenderer.invoke(IPC.relay.renumber, projectId, file),
     decideProposal: (proposalId: string, accept: boolean): Promise<RelayApplyResult | null> =>
       ipcRenderer.invoke(IPC.relay.decideProposal, proposalId, accept),
     pendingProposals: (): Promise<RelayMcpProposal[]> =>

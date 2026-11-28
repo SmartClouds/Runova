@@ -35,6 +35,7 @@ import { projectFor } from './board';
 import { contextWindowFor, readContextTokens } from './contextMeter';
 import { launchRelayLeg } from './launch';
 import { handleRelayMcp } from './mcp/tools';
+import { schedulePlanCommit } from './planCommit';
 import { appendJournal, readPlan } from './planFiles';
 import { setRelayRuntime } from './runtime';
 import { createRelayDriver, type RelayDriver } from './service';
@@ -128,6 +129,7 @@ export async function startRelayService(): Promise<void> {
     addLegRecord: async (projectId, record) => {
       await addLegRecord(projectId, record);
       await journalLeg(projectId, record).catch(() => undefined);
+      schedulePlanCommit(projectId);
     },
     planOptions: async (projectId, docsFolder) => {
       const plan = await readPlan(await folderOf(projectId, docsFolder));
@@ -246,7 +248,10 @@ export async function startRelayService(): Promise<void> {
       broadcastToWindows(IPC.relay.onRun, view);
       watcher?.setLive(created.liveProjects());
     },
-    emitChanged: (event) => broadcastToWindows(IPC.relay.onChanged, event),
+    emitChanged: (event) => {
+      broadcastToWindows(IPC.relay.onChanged, event);
+      if (event.reason === 'files') schedulePlanCommit(event.projectId);
+    },
     emitContext: (event) => broadcastToWindows(IPC.relay.onContext, event),
     emitLegTab,
     emitCloseTab: (event) => broadcastToWindows(IPC.relay.onCloseTab, event),

@@ -1246,6 +1246,8 @@ export const IPC = {
     removeItem: 'relay:removeItem',
     // (projectId, workaroundId) -> taskId: a task that takes the workaround out
     fixWorkaround: 'relay:fixWorkaround',
+    // (projectId, file) -> newId: a file that shares its id gets the next free one (E123)
+    renumber: 'relay:renumber',
     // (relayId) -> void
     pause: 'relay:pause',
     resume: 'relay:resume',

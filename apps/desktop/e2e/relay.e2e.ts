@@ -1,7 +1,8 @@
+import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { expect, type Page, test } from '@playwright/test';
-import { type LaunchedApp, launchApp, openWorkspace } from './app';
+import { initGitRepo, type LaunchedApp, launchApp, openWorkspace } from './app';
 
 /**
  * Relay (E26) through the real app: main starts each leg's terminal, the fake `claude`
@@ -579,4 +580,34 @@ test('manages the plan by hand: views, a new task, an edit and a workaround that
 
   await views.getByRole('tab', { name: 'Overview' }).click();
   await expect(page.getByRole('region', { name: 'Workarounds and risks' })).toContainText('W001');
+});
+
+test('commits each change to the plan on its own, and leaves other staged work alone', async () => {
+  test.setTimeout(150_000);
+  launched = await launchRelayApp();
+  const { page, projectDir } = launched;
+  seedTasks(projectDir, [['T001', 'Board columns', []]]);
+  initGitRepo(launched);
+  const git = (args: string[]): string =>
+    execFileSync('git', ['-C', projectDir, ...args], { encoding: 'utf-8' });
+  git(['config', 'user.name', 'e2e']);
+  git(['config', 'user.email', 'e2e@example.com']);
+  git(['config', 'commit.gpgsign', 'false']);
+  git(['add', 'feature.txt']);
+  await openWorkspace(launched);
+  await openTasksTab(page);
+  await page.getByRole('button', { name: 'Open the board' }).click();
+
+  await page.getByRole('button', { name: 'New task' }).click();
+  const create = page.getByRole('dialog', { name: 'New task' });
+  await create.getByRole('textbox', { name: 'Title' }).fill('Export to CSV');
+  await create.getByRole('button', { name: 'Add task' }).click();
+
+  await expect
+    .poll(() => git(['log', '-1', '--format=%s']).trim(), { timeout: 60_000 })
+    .toBe('docs(tasks): add T002');
+  const committed = git(['show', '--name-only', '--format=', 'HEAD']).trim().split('\n').sort();
+  expect(committed).toEqual(['docs/tasks/STATUS.md', 'docs/tasks/T002-export-to-csv.md']);
+  // The file the person had staged is still staged and was not committed.
+  expect(git(['diff', '--cached', '--name-only']).trim()).toBe('feature.txt');
 });

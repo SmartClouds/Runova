@@ -87,6 +87,62 @@ function StatusChip({ status }: { status: RelayTaskCard['status'] }) {
   );
 }
 
+/**
+ * Two files with one id, usually after a pull from another computer. Either file can take the next
+ * free id; whatever names the old id keeps pointing at the other one.
+ */
+function DuplicateIds({
+  projectId,
+  duplicates,
+}: {
+  projectId: string;
+  duplicates: { id: string; files: string[] }[];
+}) {
+  const queryClient = useQueryClient();
+  async function renumber(file: string): Promise<void> {
+    try {
+      const id = await window.runova.relay.renumber(projectId, file);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.relayBoard(projectId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.relayPlanPack(projectId) });
+      toast.success(`${file} is ${id} now`, {
+        description: 'Check what named the old id, and point it at the right one.',
+      });
+    } catch (error) {
+      toast.error('Could not give it a new id', {
+        description: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+  return (
+    <section
+      aria-label="Duplicate ids"
+      className="rounded-xl bg-warning/10 p-3 text-xs ring-1 ring-warning/30 ring-inset"
+    >
+      <p className="mb-2 font-medium">
+        Two files share an id, often after a pull from another computer.
+      </p>
+      <ul className="space-y-1.5">
+        {duplicates.map((entry) => (
+          <li key={entry.id} className="flex flex-wrap items-center gap-1.5">
+            <span className="font-mono">{entry.id}</span>
+            {entry.files.slice(1).map((file) => (
+              <Button
+                key={file}
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => void renumber(file)}
+              >
+                Give {file} a new id
+              </Button>
+            ))}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 const REVISIT_WORDS: Record<RelayRevisit['state'], string> = {
   ready: 'Ready to revisit',
   due: 'Due for a look',
@@ -143,6 +199,9 @@ export function RelayOverview({
 
   return (
     <div aria-label="Overview" className="min-h-0 flex-1 space-y-3 overflow-y-auto">
+      {(pack?.duplicates ?? []).length > 0 ? (
+        <DuplicateIds projectId={board.projectId} duplicates={pack?.duplicates ?? []} />
+      ) : null}
       <Panel
         title={plan?.title ?? 'The plan'}
         action={

@@ -383,6 +383,16 @@ export function RelayRunSettingsForm({
               onCheckedChange={(commitPerTask) => void save({ options: { commitPerTask } })}
             />
           </Row>
+          <Row
+            label="Commit plan changes"
+            hint="Each change to the plan folder gets its own commit. Pushing stays yours."
+          >
+            <Switch
+              aria-label="Commit plan changes"
+              checked={settings.options.commitPlan ?? true}
+              onCheckedChange={(commitPlan) => void save({ options: { commitPlan } })}
+            />
+          </Row>
           <Row label="Close finished tabs">
             <Switch
               aria-label="Close finished tabs"

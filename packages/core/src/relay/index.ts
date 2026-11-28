@@ -9,4 +9,5 @@ export * from './prompts.js';
 export * from './proposal.js';
 export * from './runner.js';
 export * from './schedule.js';
+export * from './sync.js';
 export * from './types.js';

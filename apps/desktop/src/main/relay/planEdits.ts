@@ -1,12 +1,15 @@
-import { readFile, rm } from 'node:fs/promises';
+import { readdir, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
+  duplicateIds,
   isRelayItemId,
   isRelayTaskId,
   itemFileName,
+  itemIdFromFileName,
   nextItemId,
   nextTaskId,
   parseJournal,
+  RELAY_ITEM_KINDS,
   RELAY_ITEM_SPECS,
   type RelayItemKind,
   renderItemFile,
@@ -307,4 +310,58 @@ export async function taskForWorkaround(folder: RelayFolder, id: string): Promis
 export async function planBody(folder: RelayFolder): Promise<string | null> {
   const text = await readFile(planPath(folder), 'utf-8').catch(() => null);
   return text === null ? null : splitFrontMatter(text).body;
+}
+
+/** Ids two files share, after a pull from another computer, across tasks and every record kind. */
+export async function duplicatesIn(
+  folder: RelayFolder,
+): Promise<{ id: string; files: string[] }[]> {
+  const taskNames = (await readdir(folder.tasksDir).catch(() => [] as string[])).filter((name) =>
+    isRelayTaskId(name.split(/[-.]/)[0] ?? ''),
+  );
+  const itemNames = (
+    await Promise.all(
+      RELAY_ITEM_KINDS.map(async (kind) => {
+        const dir = RELAY_ITEM_SPECS[kind].folder;
+        const names = await readdir(join(folder.tasksDir, dir)).catch(() => [] as string[]);
+        return names
+          .filter((name) => itemIdFromFileName(kind, name))
+          .map((name) => `${dir}/${name}`);
+      }),
+    )
+  ).flat();
+  return duplicateIds([...taskNames, ...itemNames]);
+}
+
+/**
+ * Gives a file that shares its id with another the next free id: its front matter and its name.
+ * Other files keep naming the old id, since only a person can tell which of the two they meant.
+ * Returns the new id.
+ */
+export async function renumberFile(folder: RelayFolder, file: string): Promise<string> {
+  const duplicate = (await duplicatesIn(folder)).find((entry) => entry.files.includes(file));
+  if (!duplicate) throw new Error(`${file} does not share its id with another file.`);
+  const slash = file.indexOf('/');
+  const dir = slash === -1 ? '' : file.slice(0, slash);
+  const name = slash === -1 ? file : file.slice(slash + 1);
+  const kind = dir
+    ? RELAY_ITEM_KINDS.find((candidate) => RELAY_ITEM_SPECS[candidate].folder === dir)
+    : null;
+  if (dir && !kind) throw new Error(`${file} is not in a record folder.`);
+  let newId: string;
+  if (kind) {
+    newId = nextItemId(kind, (await itemIds(folder))[kind]);
+  } else {
+    const names = await readdir(folder.tasksDir);
+    newId = nextTaskId(names.map((entry) => entry.split(/[-.]/)[0] ?? ''));
+  }
+  const from = join(folder.tasksDir, ...(dir ? [dir] : []), name);
+  const content = await readFile(from, 'utf-8');
+  const renamed = name.replace(duplicate.id, newId);
+  await writeAtomic(
+    join(folder.tasksDir, ...(dir ? [dir] : []), renamed),
+    setFrontMatterValue(content, 'id', newId),
+  );
+  await rm(from, { force: true });
+  return newId;
 }

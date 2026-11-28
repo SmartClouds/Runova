@@ -269,6 +269,8 @@ export type { RelayAfterPlanMode, RelayTaskStatus };
 export interface RelayPlanPack {
   plan: RelayPlan | null;
   items: Record<RelayItemKind, RelayItem[]>;
+  /** Ids two files share, usually after a pull from another computer (E123). */
+  duplicates?: { id: string; files: string[] }[];
 }
 
 /** Front matter changes to one task. Null or empty removes the field. */
