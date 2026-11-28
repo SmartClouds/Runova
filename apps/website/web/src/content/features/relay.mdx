@@ -1,6 +1,6 @@
 ---
 title: Relay
-description: Relay splits a big job into tasks that each fit one agent session, runs them in fresh sessions one after another, and hands each session's notes to the next.
+description: Relay splits a big job into tasks or a specced plan, runs them in fresh agent sessions, and keeps every decision and workaround in the repo.
 summary: A job too big for one session becomes a set of task files. Runova runs them one after another in fresh sessions, and every session leaves a handoff for the next.
 group: build
 order: 4
@@ -19,7 +19,7 @@ An agent session has a limited context. A large job, such as a new feature acros
 
 ## A handoff between every session
 
-Every session writes a handoff file with five parts: the purpose of the task, what is done so far, the decisions made, what was tried and rejected, and the next step. The next session reads it first, so it picks up where the last one stopped instead of starting over.
+Every session writes a handoff file: the purpose of the task, what is done so far, the decisions made, the tests it ran, the workarounds it put in, what was tried and rejected, the open questions, and the next step. The next session reads it first, so it picks up where the last one stopped instead of starting over.
 
 A session ends with one of three outcomes. **Done** moves the task to Done and starts the next one. **Continue** means the session ran out of budget, so a fresh session carries on with the same task. **Blocked** pauses the relay and tells you what the agent needs from you.
 
@@ -31,6 +31,18 @@ Tasks sit on a board with To do, In progress, Testing, Done and Blocked columns,
 
 You do not have to write the task files by hand. **Split into tasks** has an AI planner size a request into tasks for you, and **Catch up** works out where a project that is already under way stands, so Relay can carry on from there.
 
+## Plan a big job in parts
+
+Not every job is about fitting a context window. **Plan only** breaks a job into parts by what each one delivers, with a full spec per part: goal, context, approach, the files and interfaces it touches, scope, acceptance criteria, a test plan and risks. The planner also writes the plan, its milestones, its risks and the questions only you can answer. Each part can be built now or later, with any agent, from its spec alone.
+
+## Everything in the repo
+
+The plan, its milestones, decisions, workarounds, risks and questions are Markdown files next to the tasks, so git keeps their history and anyone who clones the project has them. Sessions record each decision later work relies on, and each workaround with the package version it waits for. When that version comes out, Runova flags the workaround and turns it into a task with one click. Every session also lands in the task's journal, and **Redo** runs a task again with another agent, from its spec or from what the last attempt learned.
+
+## A task manager, not only a runner
+
+The board has an overview of progress by milestone and what needs you, a list you can sort and filter by priority, size, milestone and label, a roadmap, and the records. Add and edit tasks, tick acceptance criteria and write the plan by hand, or let the agents do it.
+
 ## Budgets that hold
 
-With Claude Code, Runova watches the session's real context use and tells it to finish its current step and write the handoff at 80% of its budget, so long tasks still finish without a session running out of room. Codex and Copilot report their progress through an MCP server, and other agents can run tasks too.
+With Claude Code, Runova watches the session's real context use and tells it to finish its current step and write the handoff at 80% of its budget, so long tasks still finish without a session running out of room. A task bigger than its budget can keep handing off to fresh sessions with no limit, or run past the budget altogether. Codex and Copilot report their progress through an MCP server, and other agents can run tasks too.

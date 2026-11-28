@@ -3,7 +3,7 @@ title: Relay tasks
 category: Build
 order: 15
 summary: Break work into tasks that each fit one AI session, run them one after another in fresh sessions, and carry what each session learned to the next through a handoff file.
-keywords: relay, tasks, task board, board, handoff, baton, context, context budget, 200k, session, split into tasks, split into relay tasks, revise with ai, plan first, auto mode, run relay, schedule, after a task, sdd, kanban, trello, mcp, runova_relay, finish_leg, over budget, keep handing off, run past the budget, session limit, plan mode, plan only, plan.md, milestones, decisions, workarounds, risks, questions, journal, redo, another agent, attempt, review each task
+keywords: relay, tasks, task board, board, handoff, baton, context, context budget, 200k, session, split into tasks, split into relay tasks, revise with ai, plan first, auto mode, run relay, schedule, after a task, sdd, kanban, trello, mcp, runova_relay, finish_leg, over budget, keep handing off, run past the budget, session limit, plan mode, plan only, plan.md, milestones, decisions, workarounds, risks, questions, journal, redo, another agent, attempt, review each task, overview, list, roadmap, records, priority, milestone, new task, edit task, acceptance criteria, fix with ai
 route: /workspace
 ---
 
@@ -43,7 +43,17 @@ While a relay runs, the status bar shows which task is running and how full its 
 
 **Open the board** (or **Task board** on the project page) shows every task on a glass board with five columns: To do, In progress, Testing, Done and Blocked. Cards move by themselves as the relay works. You can also drag a card to another column or order, or use Alt+arrow keys.
 
-Click a card to see its spec, the baton (the handoff sections across every session) and its session history: agent, model, how long it ran, how much context it used, and how it ended.
+Click a card to see its spec, the baton (the handoff sections across every session), its acceptance criteria (tick them as they are met), its journal and its session history: agent, model, how long it ran, how much context it used, and how it ended. **Edit** changes its title, priority, size, milestone, labels, due date, dependencies, agent and the spec itself; Runova keeps the rest of the file as it was.
+
+Above the columns you can switch views:
+
+- **Overview**: the plan's goal, progress overall and by milestone, what needs you (blocked tasks, failing tests, overdue tasks, open questions), workarounds that can go, open risks, and what finished lately. **Edit plan** writes PLAN.md.
+- **Board**: the columns.
+- **List**: every task in a table you can sort by any column and filter by status, priority, milestone, label or text.
+- **Roadmap**: the milestones in order, with their target dates, their tasks and how far along they are. A milestone past its date says it is late.
+- **Records**: decisions, workarounds, risks, questions and milestones, each with its status and details, to read, add or edit.
+
+**New task** adds a task with the next free id. When a workaround's fix is out, or its revisit date has passed, it shows **Ready to revisit** or **Due for a look**, and **Fix with AI** adds a task that takes it out.
 
 ## How a task finishes
 

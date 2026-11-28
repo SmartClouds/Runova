@@ -483,6 +483,11 @@ export const queryKeys = {
   relayBoard: (projectId: string) => ['relay', 'board', projectId] as const,
   relayTask: (projectId: string, taskId: string) => ['relay', 'task', projectId, taskId] as const,
   relayRuns: (projectId: string) => ['relay', 'runs', projectId] as const,
+  /** E122: PLAN.md and the records, the workarounds that can go, and a task's journal. */
+  relayPlanPack: (projectId: string) => ['relay', 'planPack', projectId] as const,
+  relayRevisits: (projectId: string) => ['relay', 'revisits', projectId] as const,
+  relayJournal: (projectId: string, taskId: string) =>
+    ['relay', 'journal', projectId, taskId] as const,
   /** Prefix of everything the Errors tab reads (E24). */
   errorTracking: ['error-tracking'] as const,
   errorConnections: ['error-tracking', 'connections'] as const,

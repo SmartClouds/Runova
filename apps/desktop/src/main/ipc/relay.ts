@@ -1,5 +1,9 @@
 import {
   buildLegPrompt,
+  RELAY_ITEM_KINDS,
+  RELAY_LEVELS,
+  RELAY_PRIORITIES,
+  RELAY_SIZES,
   RELAY_TASK_STATUSES,
   type RelayProposal,
   relayCapabilities,
@@ -12,6 +16,7 @@ import type {
   RelayBoard,
   RelayMcpProposal,
   RelayPlannerResult,
+  RelayPlanPack,
   RelayProjectSettings,
   RelayRedoResult,
   RelayRunView,
@@ -20,10 +25,23 @@ import type {
   RelayTaskDetail,
 } from '../../shared/relayTypes';
 import { buildRelayBoard, projectRelayFolder, relayTaskDetail } from '../relay/board';
-import { legPointers } from '../relay/planFiles';
+import {
+  createTask,
+  journalEntries,
+  removeItem,
+  removeTask,
+  saveItem,
+  savePlan,
+  saveTaskBody,
+  taskForWorkaround,
+  toggleAcceptance,
+  updateTask,
+} from '../relay/planEdits';
+import { legPointers, readAllItems, readPlan } from '../relay/planFiles';
 import { cancelPlanner, catchUpBoard, decomposeRequest, reviseBoard } from '../relay/planner';
 import { announcePlannerResult, type PlannerKind } from '../relay/plannerNotice';
 import { redoTasks } from '../relay/redo';
+import { workaroundRevisits } from '../relay/revisits';
 import { getRelayRuntime } from '../relay/runtime';
 import { legRecords, saveRelaySettings, settingsPatchSchema } from '../relay/store';
 import {
@@ -82,6 +100,83 @@ const decomposeSchema = z.object({
   request: z.string().min(1).max(100_000),
   mode: planMode.optional(),
 });
+const shortText = z.string().max(200);
+const dateText = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const milestoneId = z.string().regex(/^M\d{3,}$/);
+const priority = z.enum(RELAY_PRIORITIES);
+const size = z.enum(RELAY_SIZES);
+const labelList = z.array(z.string().min(1).max(60)).max(30);
+const taskPatchSchema = z
+  .object({
+    title: z.string().min(1).max(300).optional(),
+    epic: shortText.nullable().optional(),
+    priority: priority.nullable().optional(),
+    size: size.nullable().optional(),
+    milestone: milestoneId.nullable().optional(),
+    labels: labelList.optional(),
+    agent: z.string().max(64).nullable().optional(),
+    due: dateText.nullable().optional(),
+    estimate: z.number().int().min(0).max(10_000_000).nullable().optional(),
+    budget: z.number().int().min(10_000).max(10_000_000).nullable().optional(),
+    depends: z.array(taskId).max(100).optional(),
+  })
+  .strict();
+const taskInputSchema = z
+  .object({
+    title: z.string().min(1).max(300),
+    epic: shortText.nullable().optional(),
+    depends: z.array(taskId).max(100).optional(),
+    priority: priority.nullable().optional(),
+    size: size.nullable().optional(),
+    milestone: milestoneId.nullable().optional(),
+    labels: labelList.optional(),
+    agent: z.string().max(64).nullable().optional(),
+    due: dateText.nullable().optional(),
+    goal: z.string().max(20_000).optional(),
+    scope: z.string().max(20_000).optional(),
+    acceptance: z.array(z.string().max(1_000)).max(50).optional(),
+    testPlan: z.string().max(20_000).optional(),
+  })
+  .strict();
+const planInputSchema = z
+  .object({
+    title: z.string().max(300).optional(),
+    mode: z.enum(['fit', 'plan']).optional(),
+    budget: z.number().int().min(10_000).max(10_000_000).nullable().optional(),
+    keepRolling: z.boolean().optional(),
+    runPastBudget: z.boolean().optional(),
+    reviewEachTask: z.boolean().optional(),
+    definitionOfDone: z.array(z.string().max(500)).max(50).optional(),
+    goal: z.string().max(20_000).optional(),
+    outOfScope: z.string().max(20_000).optional(),
+  })
+  .strict();
+const itemKind = z.enum(RELAY_ITEM_KINDS);
+const itemIdSchema = z.string().regex(/^[MDWRQ]\d{3,}$/);
+const itemField = z.string().max(500).nullable().optional();
+const itemInputSchema = z
+  .object({
+    kind: itemKind,
+    id: itemIdSchema.optional(),
+    title: z.string().max(300).optional(),
+    status: z.string().max(40).optional(),
+    fields: z
+      .object({
+        task: taskId.nullable().optional(),
+        owner: itemField,
+        target: dateText.nullable().optional(),
+        dependency: itemField,
+        ecosystem: itemField,
+        waitingFor: itemField,
+        revisitBy: dateText.nullable().optional(),
+        likelihood: z.enum(RELAY_LEVELS).nullable().optional(),
+        impact: z.enum(RELAY_LEVELS).nullable().optional(),
+      })
+      .strict()
+      .optional(),
+    sections: z.record(z.string().max(80), z.string().max(20_000)).optional(),
+  })
+  .strict();
 const applyOptionsSchema = z.object({ mode: planMode.optional() }).strict().optional();
 const redoSchema = z
   .object({
@@ -235,6 +330,116 @@ export function registerRelayHandlers(): void {
     IPC.relay.start,
     (_event, input: unknown): Promise<RelayStartResult> =>
       runtime().start(startSchema.parse(input)),
+  );
+  // The plan around the tasks (E122): read it, and every edit made by hand.
+  ipcMain.handle(IPC.relay.planPack, async (_event, projectId: unknown): Promise<RelayPlanPack> => {
+    const { folder } = await projectRelayFolder(id.parse(projectId));
+    const [plan, items] = await Promise.all([readPlan(folder), readAllItems(folder)]);
+    return { plan, items };
+  });
+  ipcMain.handle(IPC.relay.revisits, async (_event, projectId: unknown) => {
+    const project = id.parse(projectId);
+    const { folder } = await projectRelayFolder(project);
+    return workaroundRevisits(project, folder);
+  });
+  ipcMain.handle(IPC.relay.journal, async (_event, projectId: unknown, task: unknown) => {
+    const { folder } = await projectRelayFolder(id.parse(projectId));
+    return journalEntries(folder, taskId.parse(task));
+  });
+  ipcMain.handle(
+    IPC.relay.updateTask,
+    async (_event, projectId: unknown, task: unknown, patch: unknown): Promise<void> => {
+      const project = id.parse(projectId);
+      const { folder } = await projectRelayFolder(project);
+      await updateTask(folder, taskId.parse(task), taskPatchSchema.parse(patch));
+      changed(project, 'files');
+    },
+  );
+  ipcMain.handle(
+    IPC.relay.saveTaskBody,
+    async (_event, projectId: unknown, task: unknown, body: unknown): Promise<void> => {
+      const project = id.parse(projectId);
+      const { folder } = await projectRelayFolder(project);
+      await saveTaskBody(folder, taskId.parse(task), z.string().max(200_000).parse(body));
+      changed(project, 'files');
+    },
+  );
+  ipcMain.handle(
+    IPC.relay.toggleAcceptance,
+    async (
+      _event,
+      projectId: unknown,
+      task: unknown,
+      index: unknown,
+      checked: unknown,
+    ): Promise<void> => {
+      const project = id.parse(projectId);
+      const { folder } = await projectRelayFolder(project);
+      await toggleAcceptance(
+        folder,
+        taskId.parse(task),
+        z.number().int().min(0).max(500).parse(index),
+        z.boolean().parse(checked),
+      );
+      changed(project, 'files');
+    },
+  );
+  ipcMain.handle(
+    IPC.relay.createTask,
+    async (_event, projectId: unknown, input: unknown): Promise<string> => {
+      const project = id.parse(projectId);
+      const { folder } = await projectRelayFolder(project);
+      const created = await createTask(folder, taskInputSchema.parse(input));
+      changed(project, 'files');
+      return created;
+    },
+  );
+  ipcMain.handle(
+    IPC.relay.removeTask,
+    async (_event, projectId: unknown, task: unknown): Promise<void> => {
+      const project = id.parse(projectId);
+      const { folder } = await projectRelayFolder(project);
+      await removeTask(folder, taskId.parse(task));
+      changed(project, 'files');
+    },
+  );
+  ipcMain.handle(
+    IPC.relay.savePlan,
+    async (_event, projectId: unknown, input: unknown): Promise<void> => {
+      const project = id.parse(projectId);
+      const { folder } = await projectRelayFolder(project);
+      await savePlan(folder, planInputSchema.parse(input));
+      changed(project, 'files');
+    },
+  );
+  ipcMain.handle(
+    IPC.relay.saveItem,
+    async (_event, projectId: unknown, input: unknown): Promise<string> => {
+      const project = id.parse(projectId);
+      const { folder } = await projectRelayFolder(project);
+      const saved = await saveItem(folder, itemInputSchema.parse(input));
+      changed(project, 'files');
+      return saved;
+    },
+  );
+  ipcMain.handle(
+    IPC.relay.removeItem,
+    async (_event, projectId: unknown, kind: unknown, itemId: unknown): Promise<void> => {
+      const project = id.parse(projectId);
+      const { folder } = await projectRelayFolder(project);
+      await removeItem(folder, itemKind.parse(kind), itemIdSchema.parse(itemId));
+      changed(project, 'files');
+    },
+  );
+  ipcMain.handle(
+    IPC.relay.fixWorkaround,
+    async (_event, projectId: unknown, itemId: unknown): Promise<string> => {
+      const project = id.parse(projectId);
+      const { folder } = await projectRelayFolder(project);
+      const created = await taskForWorkaround(folder, itemIdSchema.parse(itemId));
+      changed(project, 'files');
+      return created;
+    },
   );
   ipcMain.handle(IPC.relay.redo, async (_event, input: unknown): Promise<RelayRedoResult> => {
     const redo = redoSchema.parse(input);

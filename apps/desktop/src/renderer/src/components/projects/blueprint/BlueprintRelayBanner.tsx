@@ -45,7 +45,7 @@ export function BlueprintRelayBanner({
         type="button"
         variant="tint"
         size="sm"
-        onClick={() => useRelayBoardStore.getState().open(projectId)}
+        onClick={() => useRelayBoardStore.getState().open(projectId, undefined, 'overview')}
       >
         <FolderKanban /> Open board
       </Button>

@@ -1222,6 +1222,30 @@ export const IPC = {
     start: 'relay:start',
     // (RelayRedoInput) -> RelayRedoResult: run tasks again as a new attempt (E121)
     redo: 'relay:redo',
+    // (projectId) -> RelayPlanPack: PLAN.md and every record (E122)
+    planPack: 'relay:planPack',
+    // (projectId) -> RelayRevisit[]: which open workarounds can go
+    revisits: 'relay:revisits',
+    // (projectId, taskId) -> RelayJournalView[]
+    journal: 'relay:journal',
+    // (projectId, taskId, RelayTaskPatch) -> void
+    updateTask: 'relay:updateTask',
+    // (projectId, taskId, body) -> void
+    saveTaskBody: 'relay:saveTaskBody',
+    // (projectId, taskId, index, checked) -> void
+    toggleAcceptance: 'relay:toggleAcceptance',
+    // (projectId, RelayTaskInput) -> taskId
+    createTask: 'relay:createTask',
+    // (projectId, taskId) -> void
+    removeTask: 'relay:removeTask',
+    // (projectId, RelayPlanInput) -> void
+    savePlan: 'relay:savePlan',
+    // (projectId, RelayItemInput) -> itemId
+    saveItem: 'relay:saveItem',
+    // (projectId, kind, itemId) -> void
+    removeItem: 'relay:removeItem',
+    // (projectId, workaroundId) -> taskId: a task that takes the workaround out
+    fixWorkaround: 'relay:fixWorkaround',
     // (relayId) -> void
     pause: 'relay:pause',
     resume: 'relay:resume',

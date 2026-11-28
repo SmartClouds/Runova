@@ -215,6 +215,55 @@ describe('RelayBoardHost', () => {
     expect(bridge.$fn('relay.setStatus')).toHaveBeenCalledWith('p1', 'T002', 'blocked');
   });
 
+  it('ticks an acceptance criterion and shows the journal in the detail', async () => {
+    const { user, bridge } = open({
+      'relay.task': {
+        ...detail,
+        task: { ...detail.task, body: '## Acceptance criteria\n\n- [ ] Drags\n- [x] Drops' },
+      },
+      'relay.journal': [
+        { heading: '2026-11-28 09:30 session 1', lines: ['Result: continue', 'Tests: passed'] },
+      ],
+      'relay.toggleAcceptance': async () => undefined,
+    });
+    await user.click(
+      within(await screen.findByRole('article', { name: 'T002 Task T002' })).getByRole('button'),
+    );
+    const sheet = await screen.findByRole('complementary', { name: 'T002 details' });
+    const criteria = await within(sheet).findByRole('region', { name: 'Acceptance criteria' });
+    expect(within(criteria).getByRole('checkbox', { name: 'Drops' })).toBeChecked();
+    await user.click(within(criteria).getByRole('checkbox', { name: 'Drags' }));
+    expect(bridge.$fn('relay.toggleAcceptance')).toHaveBeenCalledWith('p1', 'T002', 0, true);
+    const journal = await within(sheet).findByRole('region', { name: 'Journal' });
+    expect(journal).toHaveTextContent('session 1');
+    expect(journal).toHaveTextContent('Result: continue · Tests: passed');
+  });
+
+  it('switches between the board views', async () => {
+    const { user } = open({
+      'relay.planPack': {
+        plan: null,
+        items: { milestone: [], decision: [], workaround: [], risk: [], question: [] },
+      },
+      'relay.revisits': [],
+    });
+    const views = await screen.findByRole('tablist', { name: 'Board views' });
+    expect(within(views).getByRole('tab', { name: 'Board' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    await user.click(within(views).getByRole('tab', { name: 'Overview' }));
+    expect(await screen.findByRole('region', { name: 'The plan' })).toHaveTextContent(
+      'No PLAN.md yet',
+    );
+    await user.click(within(views).getByRole('tab', { name: 'List' }));
+    expect(screen.getByRole('table')).toBeInTheDocument();
+    await user.click(within(views).getByRole('tab', { name: 'Records' }));
+    expect(screen.getByRole('tablist', { name: 'Kind of record' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'New task' }));
+    expect(await screen.findByRole('dialog', { name: 'New task' })).toBeInTheDocument();
+  });
+
   it('opens straight on the task it was asked to focus', async () => {
     useRelayBoardStore.getState().open('p1', 'T002');
     renderWithProviders(<RelayBoardHost />, {

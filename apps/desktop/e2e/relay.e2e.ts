@@ -509,3 +509,74 @@ test('plans parts with no budget, journals each session, and redoes a part with 
   const task = readdirSync(tasks).find((name) => name.startsWith('T001-')) ?? '';
   expect(readFileSync(join(tasks, task), 'utf-8')).toContain('attempt: 2');
 });
+
+test('manages the plan by hand: views, a new task, an edit and a workaround that can go', async () => {
+  test.setTimeout(180_000);
+  launched = await launchRelayApp();
+  const { page, projectDir } = launched;
+  seedTasks(projectDir, [['T001', 'Board columns', []]]);
+  write(
+    projectDir,
+    'docs/tasks/workarounds/W001-pin-the-parser.md',
+    [
+      '---',
+      'id: W001',
+      'title: Pin the parser',
+      'status: open',
+      'revisitBy: 2026-01-01',
+      '---',
+      '',
+      '## What we did',
+      '',
+      'Pinned the YAML parser.',
+      '',
+      '## Proper fix',
+      '',
+      'Unpin it.',
+      '',
+    ].join('\n'),
+  );
+  await openWorkspace(launched);
+  await openTasksTab(page);
+  await page.getByRole('button', { name: 'Open the board' }).click();
+  const views = page.getByRole('tablist', { name: 'Board views' });
+  await expect(views).toBeVisible();
+
+  await page.getByRole('button', { name: 'New task' }).click();
+  const create = page.getByRole('dialog', { name: 'New task' });
+  await create.getByRole('textbox', { name: 'Title' }).fill('Export to CSV');
+  await create.getByRole('combobox', { name: 'Priority' }).selectOption('p1');
+  await create.getByRole('button', { name: 'Add task' }).click();
+  await expect(create).toBeHidden();
+  const tasks = join(projectDir, 'docs', 'tasks');
+  await expect
+    .poll(() => existsSync(join(tasks, 'T002-export-to-csv.md')), { timeout: 15_000 })
+    .toBe(true);
+  expect(readFileSync(join(tasks, 'T002-export-to-csv.md'), 'utf-8')).toContain('priority: p1');
+
+  const sheet = page.getByRole('complementary', { name: 'T002 details' });
+  await sheet.getByRole('button', { name: 'Edit' }).click();
+  const edit = page.getByRole('dialog', { name: 'Edit T002' });
+  await edit.getByRole('combobox', { name: 'Size' }).selectOption('l');
+  await edit.getByRole('button', { name: 'Save' }).click();
+  await expect
+    .poll(() => readFileSync(join(tasks, 'T002-export-to-csv.md'), 'utf-8'), { timeout: 15_000 })
+    .toContain('size: l');
+
+  await views.getByRole('tab', { name: 'List' }).click();
+  await expect(page.getByRole('table')).toContainText('Export to CSV');
+
+  await views.getByRole('tab', { name: 'Records' }).click();
+  await page.getByRole('tab', { name: /Workarounds \(1\)/ }).click();
+  const row = page.getByRole('listitem', { name: 'W001 Pin the parser' });
+  await expect(row).toContainText('Due for a look');
+  await row.getByRole('button', { name: 'Fix with AI' }).click();
+  await expect
+    .poll(() => readdirSync(tasks).some((name) => name.startsWith('T003-remove-workaround-w001')), {
+      timeout: 15_000,
+    })
+    .toBe(true);
+
+  await views.getByRole('tab', { name: 'Overview' }).click();
+  await expect(page.getByRole('region', { name: 'Workarounds and risks' })).toContainText('W001');
+});

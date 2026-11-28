@@ -1,5 +1,18 @@
 import { type FSWatcher, watch } from 'node:fs';
-import { taskIdFromFileName } from '@runova/core';
+import {
+  RELAY_ITEM_KINDS,
+  RELAY_ITEM_SPECS,
+  RELAY_JOURNAL_DIR,
+  RELAY_PLAN_FILE,
+  taskIdFromFileName,
+} from '@runova/core';
+
+/** Names in the tasks folder that belong to the plan around the tasks. */
+const PLAN_ENTRIES: ReadonlySet<string> = new Set([
+  RELAY_PLAN_FILE,
+  RELAY_JOURNAL_DIR,
+  ...RELAY_ITEM_KINDS.map((kind) => RELAY_ITEM_SPECS[kind].folder),
+]);
 
 /**
  * Keeps the board live: watches a project's tasks folder and its handoffs folder while the board
@@ -48,8 +61,9 @@ export function createRelayWatcher(deps: RelayWatcherDeps) {
     if (!entry) return;
     entry.pending ??= { handoffs: new Set(), tasks: false };
     if (kind === 'tasks') {
-      // RELAY.md and other notes do not change the board; an unknown name might.
-      if (!name || taskIdFromFileName(name)) entry.pending.tasks = true;
+      // RELAY.md and other notes do not change the board; an unknown name might, and so do the
+      // plan and the record folders (E122).
+      if (!name || taskIdFromFileName(name) || PLAN_ENTRIES.has(name)) entry.pending.tasks = true;
     } else if (name) {
       const id = /^(T\d{3,})\.md$/.exec(name)?.[1];
       if (id) entry.pending.handoffs.add(id);

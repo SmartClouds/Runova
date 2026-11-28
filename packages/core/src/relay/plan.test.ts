@@ -19,6 +19,8 @@ import {
   renderAttemptArchive,
   renderItemFile,
   renderPlanFile,
+  taskFromWorkaround,
+  workaroundRevisit,
 } from './plan.js';
 
 describe('PLAN.md', () => {
@@ -239,5 +241,62 @@ describe('planRunOptions', () => {
     expect(journalResult('testing')).toBe('done');
     expect(journalResult('marked-done')).toBe('done');
     expect(journalResult('continue')).toBe('continue');
+  });
+});
+
+describe('workarounds that can go', () => {
+  const workaround = (front: string) =>
+    parseItemFile('workaround', 'W001-pin.md', `---\nid: W001\ntitle: Pin zod\n${front}\n---\n`);
+  const packages = [{ name: 'zod', ecosystem: 'node', current: '4.6.8', latest: '4.7.1' }];
+  const today = '2026-11-28';
+
+  it('is ready once the version it waits for is out or installed', () => {
+    const out = workaround('dependency: zod\necosystem: npm\nwaitingFor: 4.7.0');
+    expect(workaroundRevisit(out, packages, today)).toMatchObject({
+      state: 'ready',
+      reason: 'zod 4.7.1 is out.',
+    });
+    const installed = workaround('dependency: zod\nwaitingFor: 4.6.0');
+    expect(workaroundRevisit(installed, packages, today)).toMatchObject({
+      state: 'ready',
+      reason: 'zod 4.6.8 is installed.',
+    });
+  });
+
+  it('waits while the fix is not out, and looks only in its own ecosystem', () => {
+    const later = workaround('dependency: zod\nwaitingFor: 5.0.0');
+    expect(workaroundRevisit(later, packages, today)).toMatchObject({
+      state: 'waiting',
+      reason: 'Waits for zod 5.0.0.',
+    });
+    const elsewhere = workaround('dependency: zod\necosystem: cargo\nwaitingFor: 4.7.0');
+    expect(workaroundRevisit(elsewhere, packages, today).state).toBe('waiting');
+  });
+
+  it('is due once its revisit date has passed, and unknown with nothing to check', () => {
+    expect(workaroundRevisit(workaround('revisitBy: 2026-11-01'), [], today).state).toBe('due');
+    expect(workaroundRevisit(workaround('revisitBy: 2027-01-01'), [], today).state).toBe('waiting');
+    const issue = workaround('waitingFor: https://github.com/x/y/issues/9');
+    expect(workaroundRevisit(issue, [], today).state).toBe('unknown');
+  });
+
+  it('makes a task that takes the workaround out', () => {
+    const item = parseItemFile(
+      'workaround',
+      'W001-pin.md',
+      renderItemFile({
+        kind: 'workaround',
+        id: 'W001',
+        title: 'Pin zod',
+        dependency: 'zod',
+        waitingFor: '4.7.0',
+        sections: { 'Proper fix': 'Unpin it.', Where: 'package.json' },
+      }),
+    );
+    const task = taskFromWorkaround(item);
+    expect(task.title).toBe('Remove workaround W001: Pin zod');
+    expect(task.goal).toContain('zod 4.7.0');
+    expect(task.scope).toContain('Unpin it.');
+    expect(task.acceptance).toContain('W001 has status: fixed');
   });
 });

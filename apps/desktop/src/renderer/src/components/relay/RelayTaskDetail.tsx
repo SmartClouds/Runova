@@ -10,7 +10,7 @@ import { useState } from 'react';
 import { MarkdownMessage } from '@/components/askAi/MarkdownMessage';
 import { CliLogo } from '@/components/cliLogos';
 import { MarkdownPreview } from '@/components/editor/MarkdownPreview';
-import { ArrowRight, CircleCheck, Play, Sliders, Undo, X } from '@/components/icons';
+import { ArrowRight, CircleCheck, Pencil, Play, Sliders, Undo, X } from '@/components/icons';
 import { LoadFailure } from '@/components/pageKit';
 import { Button } from '@/components/ui/button';
 import {
@@ -26,6 +26,9 @@ import { cn } from '@/lib/utils';
 import { RedoDialog } from './RedoDialog';
 import { RelayRunSettings } from './RelayRunSettings';
 import { BOARD_COLUMNS, choiceLabel, columnSpec, formatDuration } from './relayView';
+import { TaskEditDialog } from './TaskEditDialog';
+import { AcceptanceChecklist, TaskJournal } from './TaskExtras';
+import { usePlanPack } from './usePlanPack';
 import { runTaskInNewSession } from './useRelay';
 
 const RESULT_WORDS: Record<RelayLegRecord['result'], string> = {
@@ -94,6 +97,8 @@ export function RelayTaskDetail({
   const detail = query.data;
   const handoff = detail?.handoff ?? null;
   const [redoOpen, setRedoOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const pack = usePlanPack(board.projectId);
 
   return (
     <aside
@@ -145,6 +150,25 @@ export function RelayTaskDetail({
             <Sliders /> Run settings
           </Button>
         </RelayRunSettings>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          disabled={!detail}
+          onClick={() => setEditOpen(true)}
+        >
+          <Pencil /> Edit
+        </Button>
+        {card ? (
+          <TaskEditDialog
+            open={editOpen}
+            onOpenChange={setEditOpen}
+            projectId={board.projectId}
+            task={card}
+            body={detail?.task.body ?? ''}
+            milestones={pack.data?.items.milestone ?? []}
+          />
+        ) : null}
         <Button
           type="button"
           size="sm"
@@ -274,6 +298,13 @@ export function RelayTaskDetail({
                 </ol>
               </section>
             ) : null}
+
+            <AcceptanceChecklist
+              projectId={board.projectId}
+              taskId={taskId}
+              body={detail.task.body}
+            />
+            <TaskJournal projectId={board.projectId} taskId={taskId} />
 
             <section aria-label="Spec">
               <div className="mb-1 flex items-baseline justify-between">

@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { renderTaskFile } from '@runova/core';
@@ -212,6 +212,106 @@ describe('running by hand', () => {
     expect(taskText('T002-search.md')).toContain('status: in-progress');
     expect(taskText(join('handoffs', 'T002.md'))).toContain('task: T002');
     expect(taskText('RELAY.md')).toContain('# Relay');
+  });
+});
+
+describe('the plan around the tasks', () => {
+  it('reads the plan pack and journal, and edits a task in place', async () => {
+    await load();
+    const empty = await invoke<{ plan: unknown; items: Record<string, unknown[]> }>(
+      IPC.relay.planPack,
+      'p1',
+    );
+    expect(empty.plan).toBeNull();
+    expect(empty.items.decision).toEqual([]);
+
+    await invoke(IPC.relay.updateTask, 'p1', 'T001', {
+      title: 'Sign in',
+      priority: 'p1',
+      size: 'm',
+      labels: ['auth', 'auth'],
+      due: '2026-12-01',
+      depends: ['T001', 'T002'],
+    });
+    const task = taskText('T001-login.md');
+    expect(task).toContain('title: Sign in');
+    expect(task).toContain('priority: p1');
+    expect(task).toContain('labels: [auth]');
+    expect(task).toContain('depends: [T002]');
+    expect(task).toContain('## Goal');
+
+    await invoke(
+      IPC.relay.saveTaskBody,
+      'p1',
+      'T001',
+      '## Goal\n\nSign in.\n\n## Acceptance criteria\n\n- [ ] Works\n- [ ] Fast',
+    );
+    await invoke(IPC.relay.toggleAcceptance, 'p1', 'T001', 1, true);
+    expect(taskText('T001-login.md')).toContain('- [ ] Works\n- [x] Fast');
+    expect(taskText('T001-login.md')).toContain('priority: p1');
+    await expect(invoke(IPC.relay.toggleAcceptance, 'p1', 'T001', 9, true)).rejects.toThrow(
+      /criterion 10/,
+    );
+    expect(await invoke(IPC.relay.journal, 'p1', 'T001')).toEqual([]);
+    // Hostile input never reaches the files.
+    await expect(invoke(IPC.relay.updateTask, 'p1', '../T001', { title: 'x' })).rejects.toThrow();
+    await expect(
+      invoke(IPC.relay.updateTask, 'p1', 'T001', { priority: 'urgent' }),
+    ).rejects.toThrow();
+    await expect(invoke(IPC.relay.updateTask, 'p1', 'T001', { status: 'done' })).rejects.toThrow();
+  });
+
+  it('adds and removes tasks, and refuses to remove one others depend on', async () => {
+    await load();
+    const id = await invoke<string>(IPC.relay.createTask, 'p1', {
+      title: 'Export',
+      priority: 'p2',
+      acceptance: ['Exports CSV'],
+    });
+    expect(id).toBe('T003');
+    expect(taskText('T003-export.md')).toContain('- [ ] Exports CSV');
+    await expect(invoke(IPC.relay.removeTask, 'p1', 'T001')).rejects.toThrow(/T002 depend/);
+    await invoke(IPC.relay.removeTask, 'p1', 'T003');
+    expect(existsSync(join(folder, 'docs', 'tasks', 'T003-export.md'))).toBe(false);
+  });
+
+  it('writes the plan and its records, and makes a task from a workaround', async () => {
+    await load();
+    await invoke(IPC.relay.savePlan, 'p1', { title: 'Clinic', mode: 'plan', goal: 'Paperless.' });
+    await invoke(IPC.relay.savePlan, 'p1', { reviewEachTask: true });
+    const plan = taskText('PLAN.md');
+    expect(plan).toContain('mode: plan');
+    expect(plan).toContain('reviewEachTask: true');
+    expect(plan).toContain('Paperless.');
+
+    const workaround = await invoke<string>(IPC.relay.saveItem, 'p1', {
+      kind: 'workaround',
+      title: 'Pin zod',
+      fields: { dependency: 'zod', ecosystem: 'npm', waitingFor: '4.7.0', task: 'T001' },
+      sections: { 'Proper fix': 'Unpin it.' },
+    });
+    expect(workaround).toBe('W001');
+    await invoke(IPC.relay.saveItem, 'p1', { kind: 'workaround', id: 'W001', status: 'fixed' });
+    const pack = await invoke<{ items: { workaround: { status: string; dependency: string }[] } }>(
+      IPC.relay.planPack,
+      'p1',
+    );
+    expect(pack.items.workaround[0]).toMatchObject({ status: 'fixed', dependency: 'zod' });
+    await expect(
+      invoke(IPC.relay.saveItem, 'p1', { kind: 'workaround', id: 'W001', status: 'gone' }),
+    ).rejects.toThrow(/status/);
+    expect(await invoke(IPC.relay.revisits, 'p1')).toEqual([]);
+
+    await invoke(IPC.relay.saveItem, 'p1', { kind: 'workaround', id: 'W001', status: 'open' });
+    const fix = await invoke<string>(IPC.relay.fixWorkaround, 'p1', 'W001');
+    expect(taskText(`${fix}-remove-workaround-w001-pin-zod.md`)).toContain('labels: [workaround]');
+
+    await invoke(IPC.relay.removeItem, 'p1', 'workaround', 'W001');
+    expect(existsSync(join(folder, 'docs', 'tasks', 'workarounds', 'W001-pin-zod.md'))).toBe(false);
+    await expect(invoke(IPC.relay.removeItem, 'p1', 'workaround', '../W001')).rejects.toThrow();
+    await expect(
+      invoke(IPC.relay.saveItem, 'p1', { kind: 'secret', title: 'x' }),
+    ).rejects.toThrow();
   });
 });
 

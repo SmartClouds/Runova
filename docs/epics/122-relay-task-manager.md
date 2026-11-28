@@ -32,13 +32,13 @@ and the Tasks tab keeps them up to date.
 
 ## Tasks
 
-- [ ] T1 IPC and writers for every edit.
-- [ ] T2 Overview, Board and List.
-- [ ] T3 Roadmap and the item views with edit.
-- [ ] T4 Workaround revisit check and Fix with AI.
-- [ ] T5 Blueprint writes the plan pack. (The prompt side came with E121: with Relay on it asks
-      for PLAN.md, milestones, risks and questions. Left: open the Tasks tab from the banner.)
-- [ ] T6 Help articles, website feature pages, e2e.
+- [x] T1 IPC and writers for every edit.
+- [x] T2 Overview, Board and List.
+- [x] T3 Roadmap and the item views with edit.
+- [x] T4 Workaround revisit check and Fix with AI.
+- [x] T5 Blueprint writes the plan pack. (The prompt came with E121; the banner now opens the
+      board on its Overview.)
+- [x] T6 Help articles, website feature pages, e2e.
 
 ## Acceptance criteria
 
@@ -51,3 +51,31 @@ and the Tasks tab keeps them up to date.
 - Renderer tests for each view and editor; main tests for the writers and the revisit check.
 - e2e: editing a task, a workaround flagged ready, the Blueprint in plan mode; the existing projects
   and prompt builder e2e.
+
+## Implementation notes
+
+- **Main.** `relay/planEdits.ts` holds every edit: task fields (`updateTask`), the spec
+  (`saveTaskBody`), one acceptance box (`toggleAcceptance`, counted as the card counts them), new
+  and removed tasks (a task others depend on, or one in progress, is refused), PLAN.md
+  (`savePlan`), records (`saveItem`, `removeItem`) and `taskForWorkaround`. Each changes only its
+  own lines through `setFrontMatterValue` and `setBodySection`. Twelve `relay:*` channels carry
+  them, each with a strict zod schema; ids are checked against their patterns before a path is
+  built, and the IPC tests send hostile ids.
+- **Revisits.** `workaroundRevisit` in core compares a workaround's `waitingFor` with the installed
+  and latest versions the package check reports (ecosystem names like npm or cargo map to the
+  check's own), and falls back to `revisitBy`. `relay/revisits.ts` runs the package scan only when
+  some open workaround names a package and a version. `taskFromWorkaround` writes the task that
+  takes one out, labelled `workaround`.
+- **Watcher.** PLAN.md and the record folders count as board changes, so the views refresh when an
+  agent writes them; the renderer refreshes the plan pack and journals with the board.
+- **Renderer.** The board overlay has Overview, Board, List, Roadmap and Records views
+  (`PlanViews.tsx`, pure helpers in `planView.ts`), New task, and dialogs to edit a task
+  (`TaskEditDialog`), a record (`RelayItemDialog`) and the plan (`PlanEditDialog`). The task detail
+  has Edit, tickable acceptance criteria and the journal. The board store can open on a view; the
+  Blueprint banner opens the Overview.
+
+## Status
+
+Complete. Tests: core revisit and fix-task cases; main revisit cases and IPC cases for every new
+channel; renderer helper, view, dialog and board cases; a `relay.e2e.ts` case that adds and edits a
+task by hand, lists it, sees an overdue workaround flagged and turns it into a task.

@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { LayoutGroup } from 'framer-motion';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { FolderKanban, Route, Sliders, Wand2, X } from '@/components/icons';
+import { FolderKanban, Plus, Route, Sliders, Wand2, X } from '@/components/icons';
 import { CatalogCardShimmer, EmptyState, LoadFailure } from '@/components/pageKit';
 import { Button } from '@/components/ui/button';
 import { SimpleTooltip } from '@/components/ui/tooltip';
@@ -13,15 +13,29 @@ import { queryKeys } from '@/lib/queryKeys';
 import { cn } from '@/lib/utils';
 import { useRelayBoardStore } from '@/stores/relayBoardStore';
 import { useRelayPlanDialogStore } from '@/stores/relayPlanDialogStore';
+import { PlanEditDialog } from './PlanEditDialog';
+import { RelayOverview, RelayRecords, RelayRoadmap, RelayTaskList } from './PlanViews';
 import { RelayLiveStrip } from './RelayLiveStrip';
 import { RelayRunSettings } from './RelayRunSettings';
 import { CARD_DRAG_TYPE, type CardMove, RelayTaskCard } from './RelayTaskCard';
 import { RelayTaskDetail } from './RelayTaskDetail';
 import { RunRelayButton } from './RunRelayButton';
 import { boardColumns, epicHue, neighbourStatus, relaySummary, withColumnOrder } from './relayView';
+import { TaskEditDialog } from './TaskEditDialog';
+import { usePlanPack } from './usePlanPack';
 import { useRelayActions, useRelayBoard, useRelayContextFeed } from './useRelay';
 
 /** Moves cards: the status change and the new order, shown at once and then written to the files. */
+type BoardView = 'overview' | 'board' | 'list' | 'roadmap' | 'records';
+
+const BOARD_VIEWS: { value: BoardView; label: string }[] = [
+  { value: 'overview', label: 'Overview' },
+  { value: 'board', label: 'Board' },
+  { value: 'list', label: 'List' },
+  { value: 'roadmap', label: 'Roadmap' },
+  { value: 'records', label: 'Records' },
+];
+
 function useBoardMoves(projectId: string) {
   const queryClient = useQueryClient();
   const key = queryKeys.relayBoard(projectId);
@@ -218,7 +232,13 @@ export function RelayBoard({
   const move = useBoardMoves(projectId);
   const [selected, setSelected] = useState<string | null>(focusTaskId);
   const [epic, setEpic] = useState<string | null>(null);
+  const initialView = useRelayBoardStore((state) => state.view);
+  const [view, setView] = useState<BoardView>(initialView);
+  useEffect(() => setView(initialView), [initialView]);
+  const [creating, setCreating] = useState(false);
+  const [editingPlan, setEditingPlan] = useState(false);
   const showPlan = useRelayPlanDialogStore((s) => s.show);
+  const pack = usePlanPack(projectId);
 
   useEffect(() => setSelected(focusTaskId), [focusTaskId]);
 
@@ -344,6 +364,39 @@ export function RelayBoard({
         </div>
       </header>
 
+      <div className="flex flex-wrap items-center gap-1">
+        <div role="tablist" aria-label="Board views" className="flex flex-wrap items-center gap-1">
+          {BOARD_VIEWS.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              role="tab"
+              aria-selected={view === option.value}
+              onClick={() => setView(option.value)}
+              className={cn(
+                'cursor-pointer rounded-full px-3 py-1 text-xs transition-colors',
+                view === option.value
+                  ? 'bg-primary/15 font-medium text-foreground shadow-[inset_0_0_0_1px_hsl(var(--primary)/0.35)]'
+                  : 'text-muted-foreground hover:bg-foreground/[0.06] hover:text-foreground',
+              )}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+        {board ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="soft"
+            className="ml-auto"
+            onClick={() => setCreating(true)}
+          >
+            <Plus /> New task
+          </Button>
+        ) : null}
+      </div>
+
       <div className="flex min-h-0 flex-1 gap-3">
         {query.isPending ? (
           <BoardSkeleton />
@@ -354,7 +407,7 @@ export function RelayBoard({
               retry={() => void query.refetch()}
             />
           </div>
-        ) : board.tasks.length === 0 ? (
+        ) : board.tasks.length === 0 && (view === 'board' || view === 'list') ? (
           <div className="flex flex-1 items-center justify-center">
             <EmptyState
               icon={FolderKanban}
@@ -379,7 +432,31 @@ export function RelayBoard({
             />
           </div>
         ) : (
-          <BoardColumns board={board} epic={epic} selected={selectedTask} onSelect={setSelected} />
+          <>
+            {view === 'board' ? (
+              <BoardColumns
+                board={board}
+                epic={epic}
+                selected={selectedTask}
+                onSelect={setSelected}
+              />
+            ) : null}
+            {view === 'overview' ? (
+              <RelayOverview
+                board={board}
+                pack={pack.data}
+                onSelectTask={setSelected}
+                onEditPlan={() => setEditingPlan(true)}
+              />
+            ) : null}
+            {view === 'list' ? (
+              <RelayTaskList board={board} pack={pack.data} onSelectTask={setSelected} />
+            ) : null}
+            {view === 'roadmap' ? (
+              <RelayRoadmap board={board} pack={pack.data} onSelectTask={setSelected} />
+            ) : null}
+            {view === 'records' ? <RelayRecords board={board} pack={pack.data} /> : null}
+          </>
         )}
         {board && selectedTask ? (
           <RelayTaskDetail
@@ -396,6 +473,21 @@ export function RelayBoard({
           />
         ) : null}
       </div>
+      <TaskEditDialog
+        open={creating}
+        onOpenChange={setCreating}
+        projectId={projectId}
+        task={null}
+        body=""
+        milestones={pack.data?.items.milestone ?? []}
+        onCreated={(taskId) => setSelected(taskId)}
+      />
+      <PlanEditDialog
+        open={editingPlan}
+        onOpenChange={setEditingPlan}
+        projectId={projectId}
+        plan={pack.data?.plan ?? null}
+      />
     </div>
   );
 }

@@ -5,7 +5,13 @@ interface RelayBoardState {
   projectId: string | null;
   /** A task whose details open with the board. */
   focusTaskId: string | null;
-  open: (projectId: string, focusTaskId?: string) => void;
+  /** The view the board opens on (E122); the board view when not given. */
+  view: 'overview' | 'board' | 'list' | 'roadmap' | 'records';
+  open: (
+    projectId: string,
+    focusTaskId?: string,
+    view?: 'overview' | 'board' | 'list' | 'roadmap' | 'records',
+  ) => void;
   close: () => void;
 }
 
@@ -16,6 +22,8 @@ interface RelayBoardState {
 export const useRelayBoardStore = create<RelayBoardState>((set) => ({
   projectId: null,
   focusTaskId: null,
-  open: (projectId, focusTaskId) => set({ projectId, focusTaskId: focusTaskId ?? null }),
-  close: () => set({ projectId: null, focusTaskId: null }),
+  view: 'board',
+  open: (projectId, focusTaskId, view) =>
+    set({ projectId, focusTaskId: focusTaskId ?? null, view: view ?? 'board' }),
+  close: () => set({ projectId: null, focusTaskId: null, view: 'board' }),
 }));

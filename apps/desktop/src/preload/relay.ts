@@ -1,4 +1,10 @@
-import type { RelayProposal, RelayTaskStatus } from '@runova/core';
+import type {
+  RelayItemKind,
+  RelayJournalView,
+  RelayProposal,
+  RelayRevisit,
+  RelayTaskStatus,
+} from '@runova/core';
 import { ipcRenderer } from 'electron';
 import { IPC } from '../shared/ipcChannels';
 import type {
@@ -9,10 +15,13 @@ import type {
   RelayCloseTabEvent,
   RelayContextEvent,
   RelayDecomposeInput,
+  RelayItemInput,
   RelayLegTabEvent,
   RelayMcpProposal,
+  RelayPlanInput,
   RelayPlanModeChoice,
   RelayPlannerResult,
+  RelayPlanPack,
   RelayProjectSettings,
   RelayRedoInput,
   RelayRedoResult,
@@ -23,6 +32,8 @@ import type {
   RelayStartInput,
   RelayStartResult,
   RelayTaskDetail,
+  RelayTaskInput,
+  RelayTaskPatch,
 } from '../shared/relayTypes';
 
 function subscribe<T>(channel: string, callback: (payload: T) => void): () => void {
@@ -78,6 +89,35 @@ export function createRelay() {
       ipcRenderer.invoke(IPC.relay.applyProposal, projectId, proposal, options),
     redo: (input: RelayRedoInput): Promise<RelayRedoResult> =>
       ipcRenderer.invoke(IPC.relay.redo, input),
+    planPack: (projectId: string): Promise<RelayPlanPack> =>
+      ipcRenderer.invoke(IPC.relay.planPack, projectId),
+    revisits: (projectId: string): Promise<RelayRevisit[]> =>
+      ipcRenderer.invoke(IPC.relay.revisits, projectId),
+    journal: (projectId: string, taskId: string): Promise<RelayJournalView[]> =>
+      ipcRenderer.invoke(IPC.relay.journal, projectId, taskId),
+    updateTask: (projectId: string, taskId: string, patch: RelayTaskPatch): Promise<void> =>
+      ipcRenderer.invoke(IPC.relay.updateTask, projectId, taskId, patch),
+    saveTaskBody: (projectId: string, taskId: string, body: string): Promise<void> =>
+      ipcRenderer.invoke(IPC.relay.saveTaskBody, projectId, taskId, body),
+    toggleAcceptance: (
+      projectId: string,
+      taskId: string,
+      index: number,
+      checked: boolean,
+    ): Promise<void> =>
+      ipcRenderer.invoke(IPC.relay.toggleAcceptance, projectId, taskId, index, checked),
+    createTask: (projectId: string, input: RelayTaskInput): Promise<string> =>
+      ipcRenderer.invoke(IPC.relay.createTask, projectId, input),
+    removeTask: (projectId: string, taskId: string): Promise<void> =>
+      ipcRenderer.invoke(IPC.relay.removeTask, projectId, taskId),
+    savePlan: (projectId: string, input: RelayPlanInput): Promise<void> =>
+      ipcRenderer.invoke(IPC.relay.savePlan, projectId, input),
+    saveItem: (projectId: string, input: RelayItemInput): Promise<string> =>
+      ipcRenderer.invoke(IPC.relay.saveItem, projectId, input),
+    removeItem: (projectId: string, kind: RelayItemKind, itemId: string): Promise<void> =>
+      ipcRenderer.invoke(IPC.relay.removeItem, projectId, kind, itemId),
+    fixWorkaround: (projectId: string, itemId: string): Promise<string> =>
+      ipcRenderer.invoke(IPC.relay.fixWorkaround, projectId, itemId),
     decideProposal: (proposalId: string, accept: boolean): Promise<RelayApplyResult | null> =>
       ipcRenderer.invoke(IPC.relay.decideProposal, proposalId, accept),
     pendingProposals: (): Promise<RelayMcpProposal[]> =>

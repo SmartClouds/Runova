@@ -6,11 +6,16 @@ import type {
   RelayFinished,
   RelayHandoff,
   RelayIssue,
+  RelayItem,
+  RelayItemKind,
   RelayLegRecord,
   RelayOptions,
   RelayOutcome,
+  RelayPlan,
+  RelayPriority,
   RelayProposal,
   RelayRunChoice,
+  RelaySize,
   RelayTask,
   RelayTaskOverride,
   RelayTaskStatus,
@@ -259,3 +264,78 @@ export interface RelayCloseTabEvent {
 }
 
 export type { RelayAfterPlanMode, RelayTaskStatus };
+
+/** The plan around the tasks (E122): PLAN.md and every record, for the Tasks views. */
+export interface RelayPlanPack {
+  plan: RelayPlan | null;
+  items: Record<RelayItemKind, RelayItem[]>;
+}
+
+/** Front matter changes to one task. Null or empty removes the field. */
+export interface RelayTaskPatch {
+  title?: string;
+  epic?: string | null;
+  priority?: RelayPriority | null;
+  size?: RelaySize | null;
+  milestone?: string | null;
+  labels?: string[];
+  agent?: string | null;
+  due?: string | null;
+  estimate?: number | null;
+  budget?: number | null;
+  depends?: string[];
+}
+
+/** A task added by hand. */
+export interface RelayTaskInput {
+  title: string;
+  epic?: string | null;
+  depends?: string[];
+  priority?: RelayPriority | null;
+  size?: RelaySize | null;
+  milestone?: string | null;
+  labels?: string[];
+  agent?: string | null;
+  due?: string | null;
+  goal?: string;
+  scope?: string;
+  acceptance?: string[];
+  testPlan?: string;
+}
+
+/** Changes to PLAN.md, or what a new one holds. */
+export interface RelayPlanInput {
+  title?: string;
+  mode?: RelayPlanModeChoice;
+  budget?: number | null;
+  keepRolling?: boolean;
+  runPastBudget?: boolean;
+  reviewEachTask?: boolean;
+  definitionOfDone?: string[];
+  goal?: string;
+  outOfScope?: string;
+}
+
+/** A record to add (no id) or change (with its id). */
+export interface RelayItemInput {
+  kind: RelayItemKind;
+  id?: string;
+  title?: string;
+  status?: string;
+  fields?: Partial<
+    Record<
+      | 'task'
+      | 'owner'
+      | 'target'
+      | 'dependency'
+      | 'ecosystem'
+      | 'waitingFor'
+      | 'revisitBy'
+      | 'likelihood'
+      | 'impact',
+      string | null
+    >
+  >;
+  /** Section text by heading, such as `{ Decision: '...' }`. */
+  sections?: Record<string, string>;
+}

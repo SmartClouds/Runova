@@ -45,6 +45,8 @@ export function useRelayBoard(projectId: string | null) {
       void queryClient.invalidateQueries({ queryKey: queryKeys.relayBoard(projectId) });
       if (event.reason === 'files') {
         void queryClient.invalidateQueries({ queryKey: ['relay', 'task', projectId] });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.relayPlanPack(projectId) });
+        void queryClient.invalidateQueries({ queryKey: ['relay', 'journal', projectId] });
       }
     });
     const offRun = window.runova.relay.onRun((run) => {

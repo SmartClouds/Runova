@@ -590,3 +590,139 @@ export function journalResult(
   if (result === 'testing' || result === 'marked-done') return 'done';
   return result;
 }
+
+// ---------------------------------------------------------------------------------------------
+// Workarounds that can go
+// ---------------------------------------------------------------------------------------------
+
+/** A package version the project knows, as the package check reports it. */
+export interface RelayKnownPackage {
+  name: string;
+  /** The package check's ecosystem: node, dotnet, dart, python, rust, kotlin, swift. */
+  ecosystem: string;
+  current: string;
+  latest: string | null;
+}
+
+export interface RelayRevisit {
+  id: string;
+  title: string;
+  /**
+   * `ready`: the version it waits for is out (or installed). `due`: its revisit date has passed.
+   * `waiting`: neither yet. `unknown`: it names no version or date Runova can check.
+   */
+  state: 'ready' | 'due' | 'waiting' | 'unknown';
+  reason: string;
+}
+
+/** The ecosystem names a workaround may use, mapped to the package check's. */
+const ECOSYSTEMS: Record<string, string> = {
+  npm: 'node',
+  node: 'node',
+  pnpm: 'node',
+  yarn: 'node',
+  bun: 'node',
+  nuget: 'dotnet',
+  dotnet: 'dotnet',
+  pub: 'dart',
+  dart: 'dart',
+  flutter: 'dart',
+  pip: 'python',
+  pypi: 'python',
+  python: 'python',
+  cargo: 'rust',
+  crates: 'rust',
+  rust: 'rust',
+  maven: 'kotlin',
+  gradle: 'kotlin',
+  kotlin: 'kotlin',
+  swift: 'swift',
+  spm: 'swift',
+};
+
+function numeric(version: string): number[] | null {
+  const match = /^\s*[v^~>=]*\s*(\d+(?:\.\d+)*)/.exec(version);
+  return match?.[1] ? match[1].split('.').map((part) => Number.parseInt(part, 10)) : null;
+}
+
+function atLeast(version: string, wanted: string): boolean | null {
+  const left = numeric(version);
+  const right = numeric(wanted);
+  if (!left || !right) return null;
+  for (let index = 0; index < Math.max(left.length, right.length); index += 1) {
+    const difference = (left[index] ?? 0) - (right[index] ?? 0);
+    if (difference !== 0) return difference > 0;
+  }
+  return true;
+}
+
+/**
+ * Whether an open workaround can go: the version it waits for is out, or its revisit date has
+ * passed. A workaround that waits on an issue link rather than a version is checked by date only.
+ */
+export function workaroundRevisit(
+  item: RelayItem,
+  packages: readonly RelayKnownPackage[],
+  today: string,
+): RelayRevisit {
+  const base = { id: item.id, title: item.title };
+  const wanted = item.waitingFor && numeric(item.waitingFor) ? item.waitingFor : null;
+  if (item.dependency && wanted) {
+    const ecosystem = item.ecosystem ? (ECOSYSTEMS[item.ecosystem] ?? item.ecosystem) : null;
+    const found = packages.filter(
+      (entry) =>
+        entry.name.toLowerCase() === item.dependency?.toLowerCase() &&
+        (!ecosystem || entry.ecosystem === ecosystem),
+    );
+    for (const entry of found) {
+      if (atLeast(entry.current, wanted)) {
+        return { ...base, state: 'ready', reason: `${entry.name} ${entry.current} is installed.` };
+      }
+      if (entry.latest && atLeast(entry.latest, wanted)) {
+        return { ...base, state: 'ready', reason: `${entry.name} ${entry.latest} is out.` };
+      }
+    }
+  }
+  if (item.revisitBy && /^\d{4}-\d{2}-\d{2}$/.test(item.revisitBy) && item.revisitBy <= today) {
+    return { ...base, state: 'due', reason: `It was due for a look on ${item.revisitBy}.` };
+  }
+  if (item.dependency && wanted) {
+    return { ...base, state: 'waiting', reason: `Waits for ${item.dependency} ${wanted}.` };
+  }
+  if (item.revisitBy) {
+    return { ...base, state: 'waiting', reason: `Look again on ${item.revisitBy}.` };
+  }
+  return {
+    ...base,
+    state: 'unknown',
+    reason: item.waitingFor
+      ? `Waits for ${item.waitingFor}, which Runova can not check.`
+      : 'It names no version or date to wait for.',
+  };
+}
+
+/** A task that takes a workaround out, for when its fix is available. */
+export function taskFromWorkaround(item: RelayItem): {
+  title: string;
+  goal: string;
+  scope: string;
+  acceptance: string[];
+} {
+  const proper = bodySection(item.body, 'Proper fix');
+  const where = bodySection(item.body, 'Where');
+  const fix = item.dependency
+    ? `${item.dependency}${item.waitingFor ? ` ${item.waitingFor}` : ''}`
+    : 'its fix';
+  return {
+    title: `Remove workaround ${item.id}: ${item.title}`,
+    goal: `Take out workaround ${item.id} now that ${fix} is available.`,
+    scope: [proper && `Proper fix: ${proper}`, where && `Where: ${where}`]
+      .filter(Boolean)
+      .join('\n\n'),
+    acceptance: [
+      `The code marked with ${item.id} is back to the proper fix`,
+      `${item.id} has status: fixed`,
+      'The tests pass',
+    ],
+  };
+}
