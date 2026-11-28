@@ -14,7 +14,9 @@ val generatedFonts = layout.buildDirectory.dir("generated/fonts/res")
 
 android {
     namespace = "com.runovahq.app"
-    compileSdk = 37
+    compileSdk {
+        version = release(37) { minorApiLevel = 1 }
+    }
 
     defaultConfig {
         applicationId = "com.runovahq.app"
@@ -84,7 +86,7 @@ android {
 }
 
 dependencies {
-    val composeBom = platform("androidx.compose:compose-bom:2026.09.00")
+    val composeBom = platform("androidx.compose:compose-bom:2026.11.01")
     implementation(composeBom)
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.ui:ui")
